@@ -1,0 +1,1580 @@
+<!DOCTYPE html>
+<html lang="ko">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<title>MeetNotes — AI 회의록 서비스 개발 매뉴얼</title>
+<style>
+  :root {
+    --bg-base:#121212; --bg-surface:#181818; --bg-elevated:#1f1f1f; --bg-card:#252525;
+    --green:#1ed760; --green-dim:#1a3a1a;
+    --text-primary:#ffffff; --text-secondary:#b3b3b3; --text-muted:#4d4d4d;
+    --border:#2a2a2a; --border-mid:#4d4d4d;
+    --red:#f3727f; --orange:#ffa42b; --blue:#539df5; --purple:#a78bfa;
+  }
+  *{box-sizing:border-box;margin:0;padding:0}
+  body{background:var(--bg-base);color:var(--text-primary);font-family:'Helvetica Neue',helvetica,arial,sans-serif;line-height:1.6}
+
+  /* NAV */
+  nav{position:fixed;top:0;left:0;right:0;z-index:100;background:rgba(18,18,18,.94);backdrop-filter:blur(12px);border-bottom:1px solid var(--border);height:56px;display:flex;align-items:center;padding:0 28px;gap:4px}
+  .nav-logo{font-size:15px;font-weight:800;color:var(--green);margin-right:20px;white-space:nowrap;letter-spacing:-.5px}
+  .nav-logo span{color:var(--text-secondary);font-weight:400}
+  nav a{color:var(--text-secondary);text-decoration:none;font-size:12px;font-weight:600;padding:5px 11px;border-radius:6px;transition:all .15s;white-space:nowrap}
+  nav a:hover{color:#fff;background:var(--bg-elevated)}
+  nav a.active{color:var(--green);background:var(--green-dim)}
+  #progress{position:fixed;top:56px;left:0;right:0;height:2px;z-index:99}
+  #progress-bar{height:100%;background:var(--green);width:0%;transition:width .1s}
+
+  /* LAYOUT */
+  .page{max-width:920px;margin:0 auto;padding:80px 24px 80px}
+
+  /* HERO */
+  .hero{text-align:center;padding:52px 0 44px;border-bottom:1px solid var(--border);margin-bottom:60px}
+  .hero-badge{display:inline-flex;align-items:center;gap:6px;background:var(--green-dim);border:1px solid var(--green);color:var(--green);font-size:11px;font-weight:700;letter-spacing:1.5px;text-transform:uppercase;padding:5px 14px;border-radius:9999px;margin-bottom:18px}
+  .hero h1{font-size:38px;font-weight:800;line-height:1.15;letter-spacing:-1px;margin-bottom:14px}
+  .hero h1 em{color:var(--green);font-style:normal}
+  .hero p{font-size:15px;color:var(--text-secondary);max-width:540px;margin:0 auto 20px}
+  .hero-chips{display:flex;gap:8px;justify-content:center;flex-wrap:wrap}
+  .chip{display:inline-flex;align-items:center;gap:5px;padding:4px 12px;border-radius:9999px;font-size:11px;font-weight:700;border:1px solid}
+  .chip.green{background:var(--green-dim);border-color:var(--green);color:var(--green)}
+  .chip.blue{background:rgba(83,157,245,.1);border-color:var(--blue);color:var(--blue)}
+  .chip.orange{background:rgba(255,164,43,.1);border-color:var(--orange);color:var(--orange)}
+  .chip.purple{background:rgba(167,139,250,.1);border-color:var(--purple);color:var(--purple)}
+
+  /* PHASE NAV */
+  .phase-nav{display:flex;gap:8px;margin-bottom:52px;overflow-x:auto;padding-bottom:4px}
+  .phase-btn{display:flex;align-items:center;gap:8px;padding:9px 16px;border-radius:9999px;border:1px solid var(--border);background:var(--bg-elevated);color:var(--text-secondary);font-size:12px;font-weight:700;cursor:pointer;white-space:nowrap;text-decoration:none;transition:all .15s}
+  .phase-btn:hover{border-color:var(--green);color:var(--green);background:var(--green-dim)}
+  .phase-num{width:20px;height:20px;border-radius:50%;background:var(--border);color:var(--text-muted);display:flex;align-items:center;justify-content:center;font-size:10px;font-weight:800}
+  .phase-btn:hover .phase-num{background:var(--green);color:#000}
+
+  /* SECTION */
+  .section{margin-bottom:80px;scroll-margin-top:76px}
+  .section-header{display:flex;align-items:center;gap:14px;margin-bottom:28px;padding-bottom:16px;border-bottom:1px solid var(--border)}
+  .section-badge{display:inline-flex;align-items:center;gap:6px;padding:5px 14px;border-radius:9999px;font-size:11px;font-weight:800;letter-spacing:1.5px;text-transform:uppercase;white-space:nowrap;border:1px solid}
+  .section-badge.green{background:var(--green-dim);border-color:var(--green);color:var(--green)}
+  .section-badge.blue{background:rgba(83,157,245,.1);border-color:var(--blue);color:var(--blue)}
+  .section-badge.orange{background:rgba(255,164,43,.1);border-color:var(--orange);color:var(--orange)}
+  .section-badge.red{background:rgba(243,114,127,.1);border-color:var(--red);color:var(--red)}
+  .section-badge.purple{background:rgba(167,139,250,.1);border-color:var(--purple);color:var(--purple)}
+  .section h2{font-size:24px;font-weight:800;letter-spacing:-.5px}
+
+  /* CARD */
+  .card{background:var(--bg-surface);border:1px solid var(--border);border-radius:12px;padding:22px;margin-bottom:14px}
+  .card h3{font-size:14px;font-weight:700;margin-bottom:8px}
+  .card p{font-size:13px;color:var(--text-secondary);line-height:1.7}
+  .grid-2{display:grid;grid-template-columns:1fr 1fr;gap:14px}
+  .grid-3{display:grid;grid-template-columns:1fr 1fr 1fr;gap:14px}
+  @media(max-width:640px){.grid-2,.grid-3{grid-template-columns:1fr}}
+
+  /* CALLOUT */
+  .callout{display:flex;gap:12px;padding:14px 18px;border-radius:8px;margin-bottom:14px;font-size:13px;line-height:1.7}
+  .callout-icon{font-size:17px;flex-shrink:0;margin-top:1px}
+  .callout.green{background:var(--green-dim);border-left:3px solid var(--green)}
+  .callout.blue{background:rgba(83,157,245,.08);border-left:3px solid var(--blue)}
+  .callout.orange{background:rgba(255,164,43,.08);border-left:3px solid var(--orange)}
+  .callout.red{background:rgba(243,114,127,.08);border-left:3px solid var(--red)}
+  .callout.purple{background:rgba(167,139,250,.08);border-left:3px solid var(--purple)}
+
+  /* CODE */
+  pre{background:#0d0d0d;border:1px solid var(--border);border-radius:8px;padding:18px 22px;overflow-x:auto;font-family:'SF Mono','Fira Code',monospace;font-size:12px;line-height:1.8;margin-bottom:14px}
+  .cm{color:#6a9955} .kw{color:#569cd6} .st{color:#ce9178} .fn{color:#dcdcaa} .nm{color:#b5cea8} .tp{color:#4ec9b0} .pp{color:#9cdcfe}
+  .code-label{font-size:10px;font-weight:700;letter-spacing:1.5px;color:var(--text-muted);text-transform:uppercase;margin-bottom:7px;display:flex;align-items:center;gap:7px}
+  .code-label::before{content:'';display:inline-block;width:7px;height:7px;border-radius:50%;background:var(--green)}
+  code{background:var(--bg-card);border:1px solid var(--border);border-radius:4px;padding:2px 6px;font-family:'SF Mono',monospace;font-size:12px;color:#ce9178}
+
+  /* STEPS */
+  .steps{display:flex;flex-direction:column;gap:0}
+  .step{display:flex;gap:18px;position:relative;padding-bottom:28px}
+  .step:last-child{padding-bottom:0}
+  .step-left{display:flex;flex-direction:column;align-items:center}
+  .step-num{width:34px;height:34px;border-radius:50%;background:var(--green-dim);border:2px solid var(--green);color:var(--green);font-size:13px;font-weight:800;display:flex;align-items:center;justify-content:center;flex-shrink:0}
+  .step-line{width:2px;flex:1;background:var(--border);margin-top:7px;min-height:20px}
+  .step:last-child .step-line{display:none}
+  .step-content{padding-top:5px;flex:1}
+  .step-content h4{font-size:14px;font-weight:700;margin-bottom:5px}
+  .step-content p{font-size:13px;color:var(--text-secondary);line-height:1.7}
+
+  /* MOCKUP */
+  .mockup{background:#0d0d0d;border:1px solid var(--border);border-radius:12px;overflow:hidden;margin-bottom:14px}
+  .mockup-bar{background:var(--bg-surface);border-bottom:1px solid var(--border);padding:10px 14px;display:flex;align-items:center;gap:7px}
+  .mdot{width:10px;height:10px;border-radius:50%}
+  .mockup-url{background:var(--bg-elevated);border-radius:5px;padding:3px 10px;font-size:11px;color:var(--text-muted);flex:1;margin:0 8px}
+  .mockup-body{padding:18px}
+
+  /* FLOW */
+  .flow{display:flex;align-items:center;overflow-x:auto;padding:20px 0;margin-bottom:14px;gap:0}
+  .fnode{background:var(--bg-elevated);border:1px solid var(--border-mid);border-radius:8px;padding:10px 14px;text-align:center;min-width:96px;flex-shrink:0}
+  .fnode .ficon{font-size:20px;margin-bottom:4px}
+  .fnode .flabel{font-size:11px;font-weight:600;color:var(--text-secondary)}
+  .fnode.active{background:var(--green-dim);border-color:var(--green)}
+  .fnode.active .flabel{color:var(--green)}
+  .farrow{font-size:15px;color:var(--border-mid);margin:0 5px;flex-shrink:0}
+  .farrow.green{color:var(--green)}
+
+  /* BADGE */
+  .badge{display:inline-flex;align-items:center;gap:4px;padding:2px 8px;border-radius:9999px;font-size:10px;font-weight:700}
+  .badge.green{background:var(--green-dim);color:var(--green)}
+  .badge.blue{background:rgba(83,157,245,.15);color:var(--blue)}
+  .badge.orange{background:rgba(255,164,43,.15);color:var(--orange)}
+  .badge.red{background:rgba(243,114,127,.15);color:var(--red)}
+  .badge.purple{background:rgba(167,139,250,.15);color:var(--purple)}
+
+  /* TOKEN TABLE */
+  .ttable{width:100%;border-collapse:collapse;margin-bottom:14px}
+  .ttable th{text-align:left;font-size:10px;font-weight:700;letter-spacing:1.5px;text-transform:uppercase;color:var(--text-muted);padding:7px 10px;border-bottom:1px solid var(--border)}
+  .ttable td{padding:9px 10px;font-size:12px;border-bottom:1px solid var(--border);vertical-align:middle}
+  .ttable tr:last-child td{border-bottom:none}
+  .swatch{width:18px;height:18px;border-radius:4px;display:inline-block;vertical-align:middle;border:1px solid rgba(255,255,255,.1)}
+
+  /* CHECKLIST */
+  .checklist{list-style:none;display:flex;flex-direction:column;gap:7px}
+  .checklist li{display:flex;gap:9px;align-items:flex-start;font-size:13px;color:var(--text-secondary)}
+  .checklist li::before{content:'✓';color:var(--green);font-weight:800;flex-shrink:0;margin-top:1px}
+  .checklist li.warn::before{content:'⚠';color:var(--orange)}
+  .checklist li.fail::before{content:'✕';color:var(--red)}
+
+  /* ISSUE TABLE */
+  .itable{width:100%;border-collapse:collapse;border:1px solid var(--border);border-radius:8px;overflow:hidden}
+  .itable th{text-align:left;font-size:10px;font-weight:700;letter-spacing:1.5px;text-transform:uppercase;color:var(--text-muted);padding:8px 12px;border-bottom:1px solid var(--border);background:var(--bg-surface)}
+  .itable td{padding:11px 12px;font-size:12px;line-height:1.6;border-bottom:1px solid var(--border);vertical-align:top}
+  .itable tr:last-child td{border-bottom:none}
+
+  /* APP COMPONENTS (mockup) */
+  .app-card{background:var(--bg-surface);border-radius:8px;padding:16px;margin-bottom:10px;box-shadow:rgba(0,0,0,.3) 0 8px 8px}
+  .app-btn-green{padding:7px 16px;background:var(--green);border:none;border-radius:9999px;font-size:12px;font-weight:700;color:#000;cursor:default;display:inline-flex;align-items:center;gap:5px;text-transform:uppercase;letter-spacing:1.2px}
+  .app-btn-pill{padding:5px 12px;background:var(--bg-elevated);border:1px solid #5a5a5a;border-radius:9999px;font-size:12px;font-weight:700;color:#e0e0e0;cursor:default;display:inline-flex;align-items:center}
+  .app-btn-danger{padding:5px 12px;background:rgba(243,114,127,.1);border:1px solid var(--red);border-radius:9999px;font-size:12px;font-weight:700;color:var(--red);cursor:default;display:inline-flex;align-items:center}
+  .app-label{font-size:10px;font-weight:700;color:var(--text-secondary);text-transform:uppercase;letter-spacing:2px;margin-bottom:8px;display:block}
+  .app-input{width:100%;height:36px;background:var(--bg-elevated);border:none;box-shadow:rgb(18,18,18) 0 1px 0,rgb(124,124,124) 0 0 0 1px inset;border-radius:4px;padding:0 12px;font-size:12px;color:var(--text-muted)}
+  .app-toggle{width:36px;height:20px;background:var(--border-mid);border-radius:9999px;position:relative;cursor:default;flex-shrink:0}
+  .app-toggle.on{background:var(--green)}
+  .app-toggle-thumb{position:absolute;top:2px;left:2px;width:16px;height:16px;background:#fff;border-radius:50%}
+  .app-toggle.on .app-toggle-thumb{transform:translateX(16px)}
+  .topbar{background:var(--bg-surface);border-bottom:1px solid var(--border);height:48px;display:flex;align-items:center;justify-content:space-between;padding:0 18px}
+
+  /* SLACK PREVIEW */
+  .slack-msg{background:#1a1d21;border-radius:8px;padding:14px;font-family:sans-serif}
+  .slack-name{font-size:13px;font-weight:700;color:#d1d2d3;margin-bottom:3px;display:flex;align-items:center;gap:6px}
+  .slack-app-badge{font-size:10px;background:#1264A3;color:#fff;padding:1px 5px;border-radius:3px;font-weight:700}
+  .slack-body{font-size:13px;color:#d1d2d3;line-height:1.6}
+  .slack-header{font-size:14px;font-weight:700;color:#fff;margin-bottom:4px}
+  .slack-meta{font-size:12px;color:#8c8f93;margin-bottom:10px}
+  .slack-section{margin-bottom:10px}
+  .slack-section strong{color:#fff}
+  .slack-kw{background:#2a2d31;border-radius:3px;padding:2px 6px;font-size:11px;color:#d1d2d3;margin:2px;display:inline-block}
+  hr{border:none;border-top:1px solid var(--border);margin:28px 0}
+</style>
+</head>
+<body>
+<div id="progress"><div id="progress-bar"></div></div>
+
+<nav>
+  <div class="nav-logo">MeetNotes <span>Manual</span></div>
+  <a href="#setup">🚀 시작하기</a>
+  <a href="#ideation">💡 아이디어</a>
+  <a href="#planning">📋 기획</a>
+  <a href="#design">🎨 디자인</a>
+  <a href="#dev">⚙️ 개발</a>
+  <a href="#qa">🧪 QA</a>
+</nav>
+
+<div class="page">
+
+<!-- HERO -->
+<div class="hero">
+  <div class="hero-badge">📖 Team Manual v1.0</div>
+  <h1>MeetNotes<br><em>AI 회의록</em> 서비스 개발 가이드</h1>
+  <p>회의를 녹음하면 AI가 자동으로 회의록을 작성해주는 MeetNotes 전체 개발 과정을 담은 팀 매뉴얼입니다.</p>
+  <div class="hero-chips">
+    <span class="chip green">🎙 Deepgram STT</span>
+    <span class="chip blue">✨ Gemini 2.5 Flash</span>
+    <span class="chip orange">💬 Slack 전송</span>
+    <span class="chip purple">Next.js 14</span>
+  </div>
+</div>
+
+<!-- PHASE NAV -->
+<div class="phase-nav">
+  <a href="#setup" class="phase-btn"><span class="phase-num">0</span>🚀 시작하기</a>
+  <a href="#ideation" class="phase-btn"><span class="phase-num">1</span>💡 아이디어회의</a>
+  <a href="#planning" class="phase-btn"><span class="phase-num">2</span>📋 기획</a>
+  <a href="#design" class="phase-btn"><span class="phase-num">3</span>🎨 디자인</a>
+  <a href="#dev" class="phase-btn"><span class="phase-num">4</span>⚙️ 개발</a>
+  <a href="#qa" class="phase-btn"><span class="phase-num">5</span>🧪 QA</a>
+</div>
+
+
+<!-- ═══════════════════════════════════════════════════ -->
+<!-- 0. 시작하기 (환경 세팅) -->
+<!-- ═══════════════════════════════════════════════════ -->
+<section class="section" id="setup">
+  <div class="section-header">
+    <div class="section-badge purple">00 · 시작하기</div>
+    <h2>처음부터 따라하는 환경 세팅</h2>
+  </div>
+
+  <div class="callout purple">
+    <div class="callout-icon">🗺️</div>
+    <div><strong>이 섹션에서 하는 일:</strong> MeetNotes를 로컬에서 완전히 실행하기 위해 필요한 API 키 발급, 프로젝트 설치, 앱 내 설정까지 단계별로 안내합니다. 약 <strong>20~30분</strong>이면 모든 기능이 동작하는 개발 환경을 완성할 수 있습니다.</div>
+  </div>
+
+  <!-- ── 준비물 ── -->
+  <div class="card" style="margin-bottom:20px">
+    <h3 style="margin-bottom:14px">✅ 사전 준비물 체크리스트</h3>
+    <div class="grid-2">
+      <div>
+        <div style="font-size:11px;font-weight:700;color:var(--text-muted);text-transform:uppercase;letter-spacing:1.5px;margin-bottom:10px">소프트웨어</div>
+        <ul class="checklist">
+          <li><strong>Node.js 18+</strong> — <code>node -v</code> 로 확인. <a href="https://nodejs.org" style="color:var(--blue)">nodejs.org</a> 에서 LTS 설치</li>
+          <li><strong>npm 9+</strong> — Node.js 설치 시 자동 포함</li>
+          <li><strong>Git</strong> — 저장소 클론용</li>
+          <li><strong>Chrome</strong> — 마이크 API 지원이 가장 안정적</li>
+        </ul>
+      </div>
+      <div>
+        <div style="font-size:11px;font-weight:700;color:var(--text-muted);text-transform:uppercase;letter-spacing:1.5px;margin-bottom:10px">계정 (회원가입 필요)</div>
+        <ul class="checklist">
+          <li><strong>Deepgram</strong> — 음성 전사 API (<a href="https://deepgram.com" style="color:var(--blue)">deepgram.com</a>)</li>
+          <li><strong>Google 계정</strong> — Gemini AI + Calendar 연동</li>
+          <li><strong>Slack 워크스페이스</strong> — Webhook 전송용 (무료 플랜 가능)</li>
+        </ul>
+      </div>
+    </div>
+  </div>
+
+  <!-- ── Step 1: 프로젝트 설치 ── -->
+  <div class="card" style="border-left:3px solid var(--purple);margin-bottom:20px">
+    <div style="display:flex;align-items:center;gap:10px;margin-bottom:14px">
+      <span class="badge purple">STEP 1</span>
+      <h3 style="margin:0">프로젝트 클론 & 패키지 설치</h3>
+    </div>
+    <div class="steps">
+      <div class="step">
+        <div class="step-left"><div class="step-num">1</div><div class="step-line"></div></div>
+        <div class="step-content">
+          <h4>저장소 클론</h4>
+          <p>팀 Git 저장소에서 프로젝트를 내려받습니다.</p>
+          <div class="code-label">터미널</div>
+          <pre><span class="fn">git</span> clone https://github.com/your-org/meetnotes.git
+<span class="fn">cd</span> meetnotes/meetnotes</pre>
+        </div>
+      </div>
+      <div class="step">
+        <div class="step-left"><div class="step-num">2</div><div class="step-line"></div></div>
+        <div class="step-content">
+          <h4>패키지 설치</h4>
+          <pre><span class="fn">npm</span> install</pre>
+          <p style="margin-top:6px">약 1~2분 소요됩니다. <code>node_modules/</code> 폴더가 생성되면 완료입니다.</p>
+        </div>
+      </div>
+      <div class="step">
+        <div class="step-left"><div class="step-num">3</div><div class="step-line"></div></div>
+        <div class="step-content">
+          <h4>환경변수 파일 생성</h4>
+          <p>프로젝트 루트에 <code>.env.local</code> 파일을 직접 만듭니다. (아래 Step 6에서 실제 키를 채워 넣습니다)</p>
+          <div class="code-label">.env.local — 초기 파일 생성</div>
+          <pre><span class="cm"># .env.local (프로젝트 루트에 생성)</span>
+<span class="pp">DEEPGRAM_API_KEY</span>=여기에_입력
+<span class="pp">GOOGLE_AI_API_KEY</span>=여기에_입력
+<span class="pp">NEXT_PUBLIC_APP_URL</span>=<span class="st">http://localhost:3000</span></pre>
+        </div>
+      </div>
+    </div>
+  </div>
+
+  <!-- ── Step 2: Deepgram ── -->
+  <div class="card" style="border-left:3px solid var(--blue);margin-bottom:20px">
+    <div style="display:flex;align-items:center;gap:10px;margin-bottom:14px">
+      <span class="badge blue">STEP 2</span>
+      <h3 style="margin:0">Deepgram API 키 발급 — 음성 전사</h3>
+    </div>
+    <div class="callout blue" style="margin-bottom:14px">
+      <div class="callout-icon">ℹ️</div>
+      <div><strong>무료 플랜:</strong> 가입 즉시 $200 크레딧 제공 (약 수백 시간 분량). 신용카드 불필요.</div>
+    </div>
+    <div class="steps">
+      <div class="step">
+        <div class="step-left"><div class="step-num">1</div><div class="step-line"></div></div>
+        <div class="step-content">
+          <h4>Deepgram 가입</h4>
+          <p><a href="https://console.deepgram.com/signup" style="color:var(--blue)">console.deepgram.com/signup</a> 접속 → Google 계정 또는 이메일로 가입</p>
+        </div>
+      </div>
+      <div class="step">
+        <div class="step-left"><div class="step-num">2</div><div class="step-line"></div></div>
+        <div class="step-content">
+          <h4>API 키 생성</h4>
+          <p>좌측 메뉴 <strong>API Keys</strong> → <strong>Create a New API Key</strong> 클릭</p>
+          <!-- Deepgram 콘솔 모의화면 -->
+          <div class="mockup" style="margin-top:10px">
+            <div class="mockup-bar">
+              <div class="mdot" style="background:#ff5f57"></div><div class="mdot" style="background:#ffbd2e"></div><div class="mdot" style="background:#28ca41"></div>
+              <div class="mockup-url">console.deepgram.com/project/.../api-keys</div>
+            </div>
+            <div style="padding:16px;background:#0d1117">
+              <div style="display:flex;justify-content:space-between;align-items:center;margin-bottom:14px">
+                <div style="font-size:13px;font-weight:700;color:#e6edf3">API Keys</div>
+                <div style="background:#238636;color:#fff;padding:5px 14px;border-radius:6px;font-size:12px;font-weight:600;cursor:default">+ Create a New API Key</div>
+              </div>
+              <div style="background:#161b22;border:1px solid #30363d;border-radius:6px;padding:12px 16px">
+                <div style="display:flex;gap:10px;margin-bottom:10px">
+                  <div style="flex:1">
+                    <div style="font-size:10px;color:#8b949e;margin-bottom:4px">Key Name</div>
+                    <div style="background:#0d1117;border:1px solid #30363d;border-radius:4px;padding:6px 10px;font-size:12px;color:#e6edf3">meetnotes</div>
+                  </div>
+                  <div style="flex:1">
+                    <div style="font-size:10px;color:#8b949e;margin-bottom:4px">Permissions</div>
+                    <div style="background:#0d1117;border:1px solid #30363d;border-radius:4px;padding:6px 10px;font-size:12px;color:#e6edf3">Member ▾</div>
+                  </div>
+                </div>
+                <div style="background:#161b22;border:1px solid #238636;border-radius:4px;padding:10px;margin-top:8px">
+                  <div style="font-size:10px;color:#8b949e;margin-bottom:4px">생성된 API Key (한번만 표시됩니다)</div>
+                  <div style="font-size:12px;color:#58a6ff;font-family:monospace">e048e1a853d44bf0364e78a82250f1a0...</div>
+                </div>
+              </div>
+            </div>
+          </div>
+        </div>
+      </div>
+      <div class="step">
+        <div class="step-left"><div class="step-num">3</div><div class="step-line"></div></div>
+        <div class="step-content">
+          <h4>.env.local에 붙여넣기</h4>
+          <p>생성된 키를 복사해 <code>.env.local</code>에 입력합니다. <strong>⚠️ 창을 닫으면 다시 볼 수 없으므로 즉시 저장하세요.</strong></p>
+          <pre><span class="pp">DEEPGRAM_API_KEY</span>=<span class="st">e048e1a853d44bf0364e78a82250f1a0xxxxx</span></pre>
+        </div>
+      </div>
+    </div>
+  </div>
+
+  <!-- ── Step 3: Google AI Studio ── -->
+  <div class="card" style="border-left:3px solid var(--green);margin-bottom:20px">
+    <div style="display:flex;align-items:center;gap:10px;margin-bottom:14px">
+      <span class="badge green">STEP 3</span>
+      <h3 style="margin:0">Google AI Studio API 키 발급 — Gemini 2.5 Flash</h3>
+    </div>
+    <div class="callout green" style="margin-bottom:14px">
+      <div class="callout-icon">ℹ️</div>
+      <div><strong>무료 플랜:</strong> Gemini 2.5 Flash 분당 10회, 일 1,500회 요청 무료. 개발·테스트에 충분합니다.</div>
+    </div>
+    <div class="steps">
+      <div class="step">
+        <div class="step-left"><div class="step-num">1</div><div class="step-line"></div></div>
+        <div class="step-content">
+          <h4>Google AI Studio 접속</h4>
+          <p><a href="https://aistudio.google.com" style="color:var(--green)">aistudio.google.com</a> 접속 → Google 계정으로 로그인</p>
+        </div>
+      </div>
+      <div class="step">
+        <div class="step-left"><div class="step-num">2</div><div class="step-line"></div></div>
+        <div class="step-content">
+          <h4>API 키 생성</h4>
+          <p>좌측 하단 <strong>Get API key</strong> → <strong>Create API key</strong> → 프로젝트 선택 (없으면 New project)</p>
+          <div class="mockup" style="margin-top:10px">
+            <div class="mockup-bar">
+              <div class="mdot" style="background:#ff5f57"></div><div class="mdot" style="background:#ffbd2e"></div><div class="mdot" style="background:#28ca41"></div>
+              <div class="mockup-url">aistudio.google.com/apikey</div>
+            </div>
+            <div style="padding:16px;background:#1c1b1f">
+              <div style="font-size:14px;font-weight:600;color:#e6e1e5;margin-bottom:14px">API keys</div>
+              <div style="background:#2b2930;border:1px solid #49454f;border-radius:8px;padding:14px;margin-bottom:12px">
+                <div style="font-size:12px;color:#cac4d0;margin-bottom:8px">Search or pick a Google Cloud project to create your API key</div>
+                <div style="background:#1c1b1f;border:1px solid #49454f;border-radius:6px;padding:8px 12px;font-size:12px;color:#e6e1e5">meetnotes ▾</div>
+              </div>
+              <div style="display:flex;justify-content:flex-end">
+                <div style="background:#6750a4;color:#fff;padding:8px 20px;border-radius:9999px;font-size:13px;font-weight:600;cursor:default">Create API key in existing project</div>
+              </div>
+              <div style="background:#2b2930;border:1px solid #49454f;border-radius:8px;padding:12px;margin-top:12px">
+                <div style="font-size:10px;color:#cac4d0;margin-bottom:4px">Your API Key</div>
+                <div style="font-size:12px;color:#d0bcff;font-family:monospace">AIzaSyAYMFpiP1bBdHLzDd7kozRPo-pHBjPpe_x</div>
+              </div>
+            </div>
+          </div>
+        </div>
+      </div>
+      <div class="step">
+        <div class="step-left"><div class="step-num">3</div><div class="step-line"></div></div>
+        <div class="step-content">
+          <h4>.env.local에 붙여넣기</h4>
+          <pre><span class="pp">GOOGLE_AI_API_KEY</span>=<span class="st">AIzaSyAYMFpiP1bBdHLzDd7kozRPo-pHBjPxxxxx</span></pre>
+        </div>
+      </div>
+    </div>
+  </div>
+
+  <!-- ── Step 4: Google Apps Script ── -->
+  <div class="card" style="border-left:3px solid var(--orange);margin-bottom:20px">
+    <div style="display:flex;align-items:center;gap:10px;margin-bottom:14px">
+      <span class="badge orange">STEP 4</span>
+      <h3 style="margin:0">Google Apps Script 배포 — Google Calendar 연동</h3>
+    </div>
+    <div class="callout orange" style="margin-bottom:14px">
+      <div class="callout-icon">📅</div>
+      <div><strong>왜 필요한가?</strong> Google Calendar를 OAuth 없이 읽기 위해 본인 계정으로 Apps Script를 배포합니다. 설치 비용 없이 무료로 운영됩니다. <strong>캘린더 연동이 필요 없으면 이 단계는 건너뛰세요.</strong></div>
+    </div>
+    <div class="steps">
+      <div class="step">
+        <div class="step-left"><div class="step-num">1</div><div class="step-line"></div></div>
+        <div class="step-content">
+          <h4>Apps Script 프로젝트 생성</h4>
+          <p><a href="https://script.google.com" style="color:var(--orange)">script.google.com</a> 접속 → <strong>새 프로젝트</strong> 클릭 → 프로젝트 이름을 <code>MeetNotes Calendar</code>로 변경</p>
+        </div>
+      </div>
+      <div class="step">
+        <div class="step-left"><div class="step-num">2</div><div class="step-line"></div></div>
+        <div class="step-content">
+          <h4>코드 붙여넣기</h4>
+          <p>에디터에서 기존 내용을 모두 지우고 아래 코드를 붙여넣습니다.</p>
+          <!-- Apps Script 에디터 모의화면 -->
+          <div class="mockup" style="margin-top:10px;margin-bottom:12px">
+            <div class="mockup-bar">
+              <div class="mdot" style="background:#ff5f57"></div><div class="mdot" style="background:#ffbd2e"></div><div class="mdot" style="background:#28ca41"></div>
+              <div class="mockup-url">script.google.com/home/projects/xxx/edit</div>
+            </div>
+            <div style="background:#1e1e1e;padding:0">
+              <div style="background:#252526;border-bottom:1px solid #3c3c3c;padding:6px 14px;font-size:11px;color:#ccc;display:flex;gap:16px">
+                <span style="color:#4ec9b0">Code.gs</span>
+              </div>
+              <div style="padding:14px;font-family:'SF Mono',monospace;font-size:11px;line-height:1.8">
+                <div><span class="kw">function</span> <span class="fn">doGet</span>() {</div>
+                <div style="padding-left:20px"><span class="kw">var</span> <span class="pp">cal</span> = CalendarApp.<span class="fn">getDefaultCalendar</span>()</div>
+                <div style="padding-left:20px"><span class="kw">var</span> <span class="pp">now</span> = <span class="kw">new</span> <span class="tp">Date</span>()</div>
+                <div style="padding-left:20px"><span class="kw">var</span> <span class="pp">end</span> = <span class="kw">new</span> <span class="tp">Date</span>(now.<span class="fn">getTime</span>() + <span class="nm">7</span> * <span class="nm">86400000</span>)</div>
+                <div style="padding-left:20px"><span class="kw">var</span> <span class="pp">events</span> = cal.<span class="fn">getEvents</span>(now, end)</div>
+                <div style="padding-left:20px"><span class="cm">// ...</span></div>
+                <div>}</div>
+              </div>
+            </div>
+          </div>
+          <div class="code-label">Code.gs — 전체 코드 (복사해서 붙여넣기)</div>
+          <pre><span class="kw">function</span> <span class="fn">doGet</span>() {
+  <span class="kw">var</span> cal   = CalendarApp.<span class="fn">getDefaultCalendar</span>()
+  <span class="kw">var</span> now   = <span class="kw">new</span> Date()
+  <span class="kw">var</span> end   = <span class="kw">new</span> Date(now.<span class="fn">getTime</span>() + <span class="nm">7</span> * <span class="nm">24</span> * <span class="nm">60</span> * <span class="nm">60</span> * <span class="nm">1000</span>)
+  <span class="kw">var</span> items = cal.<span class="fn">getEvents</span>(now, end)
+
+  <span class="kw">var</span> result = items.<span class="fn">map</span>(<span class="kw">function</span>(e) {
+    <span class="kw">var</span> guests    = e.<span class="fn">getGuestList</span>(<span class="kw">true</span>)  <span class="cm">// true = 주최자 포함</span>
+    <span class="kw">var</span> attendees = guests.<span class="fn">map</span>(<span class="kw">function</span>(g) {
+      <span class="kw">return</span> g.<span class="fn">getEmail</span>()
+    })
+    <span class="kw">return</span> {
+      id:        e.<span class="fn">getId</span>().<span class="fn">replace</span>(<span class="st">'@google.com'</span>, <span class="st">''</span>),
+      title:     e.<span class="fn">getTitle</span>(),
+      start:     e.<span class="fn">getStartTime</span>().<span class="fn">toISOString</span>(),
+      end:       e.<span class="fn">getEndTime</span>().<span class="fn">toISOString</span>(),
+      attendees: attendees,
+      location:  e.<span class="fn">getLocation</span>() || <span class="kw">undefined</span>
+    }
+  })
+
+  <span class="kw">var</span> output = ContentService
+    .<span class="fn">createTextOutput</span>(JSON.<span class="fn">stringify</span>({
+      events:    result,
+      updatedAt: <span class="kw">new</span> Date().<span class="fn">toISOString</span>()
+    }))
+  output.<span class="fn">setMimeType</span>(ContentService.MimeType.JSON)
+  <span class="kw">return</span> output
+}</pre>
+        </div>
+      </div>
+      <div class="step">
+        <div class="step-left"><div class="step-num">3</div><div class="step-line"></div></div>
+        <div class="step-content">
+          <h4>웹 앱으로 배포</h4>
+          <p>상단 메뉴 <strong>배포 → 새 배포</strong> 클릭</p>
+          <div class="mockup" style="margin-top:10px">
+            <div class="mockup-bar">
+              <div class="mdot" style="background:#ff5f57"></div><div class="mdot" style="background:#ffbd2e"></div><div class="mdot" style="background:#28ca41"></div>
+              <div class="mockup-url">script.google.com — 새 배포</div>
+            </div>
+            <div style="background:#202124;padding:20px">
+              <div style="font-size:14px;font-weight:600;color:#e8eaed;margin-bottom:16px">새 배포</div>
+              <div style="background:#292b2e;border-radius:8px;padding:14px;margin-bottom:10px">
+                <div style="display:flex;justify-content:space-between;align-items:center;margin-bottom:12px">
+                  <div style="font-size:12px;color:#9aa0a6">배포 유형</div>
+                  <div style="font-size:12px;color:#8ab4f8">⚙️ 웹 앱 ▾</div>
+                </div>
+                <div style="display:flex;justify-content:space-between;align-items:center;margin-bottom:8px">
+                  <div style="font-size:12px;color:#9aa0a6">다음 사용자로 실행</div>
+                  <div style="font-size:12px;color:#e8eaed">나 (brad.and@...)</div>
+                </div>
+                <div style="display:flex;justify-content:space-between;align-items:center">
+                  <div style="font-size:12px;color:#9aa0a6">액세스 권한</div>
+                  <div style="background:#292b2e;border:1px solid #5f6368;border-radius:4px;padding:4px 8px;font-size:12px;color:#8ab4f8">🌐 모든 사용자 ▾</div>
+                </div>
+              </div>
+              <div style="display:flex;justify-content:flex-end;gap:8px">
+                <div style="padding:7px 16px;border:1px solid #5f6368;border-radius:4px;font-size:12px;color:#e8eaed;cursor:default">취소</div>
+                <div style="padding:7px 16px;background:#1a73e8;border-radius:4px;font-size:12px;color:#fff;cursor:default">배포</div>
+              </div>
+            </div>
+          </div>
+          <div class="callout orange" style="margin-top:10px">
+            <div class="callout-icon">⚠️</div>
+            <div><strong>액세스 권한을 반드시 "모든 사용자"로 설정</strong>하세요. MeetNotes 서버가 로그인 없이 URL을 직접 호출하기 때문입니다. "나만" 또는 "Google 계정 보유자"로 설정하면 403 오류가 발생합니다.</div>
+          </div>
+        </div>
+      </div>
+      <div class="step">
+        <div class="step-left"><div class="step-num">4</div><div class="step-line"></div></div>
+        <div class="step-content">
+          <h4>배포 URL 복사</h4>
+          <p>배포 완료 후 나오는 <strong>웹 앱 URL</strong>을 복사합니다. 형식: <code>https://script.google.com/macros/s/AKfycb.../exec</code></p>
+          <div class="callout blue" style="margin-top:8px">
+            <div class="callout-icon">💡</div>
+            <div>코드를 수정하면 <strong>배포 → 배포 관리 → ✏️ 편집 → 버전: 새 버전</strong>으로 다시 배포해야 변경 사항이 반영됩니다.</div>
+          </div>
+        </div>
+      </div>
+      <div class="step">
+        <div class="step-left"><div class="step-num">5</div></div>
+        <div class="step-content">
+          <h4>앱에서 URL 등록</h4>
+          <p>MeetNotes 앱 실행 후 <strong>회의 설정 화면 → 📅 캘린더 연동 → Google Apps Script URL</strong> 입력란에 붙여넣습니다.</p>
+          <!-- 앱 내 캘린더 설정 UI 모의화면 -->
+          <div class="mockup" style="margin-top:10px">
+            <div class="mockup-bar">
+              <div class="mdot" style="background:#ff5f57"></div><div class="mdot" style="background:#ffbd2e"></div><div class="mdot" style="background:#28ca41"></div>
+              <div class="mockup-url">localhost:3000</div>
+            </div>
+            <div style="padding:16px;background:#181818">
+              <div style="background:var(--bg-elevated);border:1px solid var(--border);border-radius:8px;padding:14px">
+                <div style="display:flex;align-items:center;gap:8px;margin-bottom:12px">
+                  <span style="font-size:15px">📅</span>
+                  <span style="font-size:13px;font-weight:700">Google Calendar 연동</span>
+                  <span style="margin-left:auto;background:rgba(243,114,127,.15);color:#f3727f;font-size:10px;font-weight:700;padding:2px 8px;border-radius:9999px">미연결</span>
+                </div>
+                <span class="app-label">Google Apps Script URL</span>
+                <div style="display:flex;gap:8px;margin-bottom:10px">
+                  <div class="app-input" style="flex:1;display:flex;align-items:center;font-size:11px;color:#aaa">https://script.google.com/macros/s/AKfycb.../exec</div>
+                  <div style="background:var(--green);color:#000;font-size:11px;font-weight:700;padding:0 14px;border-radius:4px;display:flex;align-items:center;cursor:default;white-space:nowrap">저장</div>
+                </div>
+                <div style="font-size:11px;color:var(--text-muted)">📌 저장 후 🔄 버튼을 눌러 일정을 불러오세요</div>
+              </div>
+            </div>
+          </div>
+        </div>
+      </div>
+    </div>
+  </div>
+
+  <!-- ── Step 5: Slack Webhook ── -->
+  <div class="card" style="border-left:3px solid var(--orange);margin-bottom:20px">
+    <div style="display:flex;align-items:center;gap:10px;margin-bottom:14px">
+      <span class="badge orange">STEP 5</span>
+      <h3 style="margin:0">Slack Incoming Webhook 설정 — 회의록 전송</h3>
+    </div>
+    <div class="callout orange" style="margin-bottom:14px">
+      <div class="callout-icon">💬</div>
+      <div><strong>Slack 앱 관리자 권한 필요:</strong> 워크스페이스 관리자이거나, 관리자에게 앱 설치 승인을 받아야 합니다. Incoming Webhook은 <strong>무료 플랜</strong>에서도 사용 가능합니다.</div>
+    </div>
+    <div class="steps">
+      <div class="step">
+        <div class="step-left"><div class="step-num">1</div><div class="step-line"></div></div>
+        <div class="step-content">
+          <h4>Slack 앱 생성</h4>
+          <p><a href="https://api.slack.com/apps" style="color:var(--orange)">api.slack.com/apps</a> 접속 → <strong>Create New App</strong> → <strong>From scratch</strong> 선택</p>
+          <div class="mockup" style="margin-top:10px">
+            <div class="mockup-bar">
+              <div class="mdot" style="background:#ff5f57"></div><div class="mdot" style="background:#ffbd2e"></div><div class="mdot" style="background:#28ca41"></div>
+              <div class="mockup-url">api.slack.com/apps/new</div>
+            </div>
+            <div style="background:#1a1d21;padding:20px">
+              <div style="font-size:15px;font-weight:700;color:#d1d2d3;margin-bottom:16px">Name app & choose workspace</div>
+              <div style="margin-bottom:12px">
+                <div style="font-size:11px;color:#d1d2d3;margin-bottom:6px">App Name</div>
+                <div style="background:#222529;border:1px solid #3e4044;border-radius:4px;padding:8px 12px;font-size:13px;color:#d1d2d3">MeetNotes</div>
+              </div>
+              <div style="margin-bottom:16px">
+                <div style="font-size:11px;color:#d1d2d3;margin-bottom:6px">Pick a workspace to develop your app in:</div>
+                <div style="background:#222529;border:1px solid #3e4044;border-radius:4px;padding:8px 12px;font-size:13px;color:#d1d2d3">Your Workspace ▾</div>
+              </div>
+              <div style="display:flex;justify-content:flex-end">
+                <div style="background:#007a5a;color:#fff;padding:8px 20px;border-radius:4px;font-size:13px;font-weight:600;cursor:default">Create App</div>
+              </div>
+            </div>
+          </div>
+        </div>
+      </div>
+      <div class="step">
+        <div class="step-left"><div class="step-num">2</div><div class="step-line"></div></div>
+        <div class="step-content">
+          <h4>Incoming Webhooks 활성화</h4>
+          <p>앱 설정 페이지 좌측 <strong>Incoming Webhooks</strong> 메뉴 → 상단 토글을 <strong>On</strong>으로 변경</p>
+          <div class="mockup" style="margin-top:10px">
+            <div class="mockup-bar">
+              <div class="mdot" style="background:#ff5f57"></div><div class="mdot" style="background:#ffbd2e"></div><div class="mdot" style="background:#28ca41"></div>
+              <div class="mockup-url">api.slack.com/apps/.../incoming-webhooks</div>
+            </div>
+            <div style="background:#1a1d21;padding:20px">
+              <div style="display:flex;justify-content:space-between;align-items:center;margin-bottom:16px">
+                <div>
+                  <div style="font-size:15px;font-weight:700;color:#d1d2d3">Incoming Webhooks</div>
+                  <div style="font-size:12px;color:#8c8f93;margin-top:2px">Post messages from external sources into Slack</div>
+                </div>
+                <div style="display:flex;align-items:center;gap:8px">
+                  <span style="font-size:12px;color:#d1d2d3">Activate Incoming Webhooks</span>
+                  <div style="width:40px;height:22px;background:#007a5a;border-radius:9999px;position:relative;">
+                    <div style="position:absolute;right:3px;top:3px;width:16px;height:16px;background:#fff;border-radius:50%"></div>
+                  </div>
+                  <span style="font-size:12px;font-weight:700;color:#007a5a">On</span>
+                </div>
+              </div>
+            </div>
+          </div>
+        </div>
+      </div>
+      <div class="step">
+        <div class="step-left"><div class="step-num">3</div><div class="step-line"></div></div>
+        <div class="step-content">
+          <h4>워크스페이스에 Webhook 추가</h4>
+          <p>페이지 아래 <strong>Add New Webhook to Workspace</strong> 클릭 → 채널 선택 (예: <code>#회의록</code>) → <strong>허용</strong></p>
+          <div class="mockup" style="margin-top:10px">
+            <div class="mockup-bar">
+              <div class="mdot" style="background:#ff5f57"></div><div class="mdot" style="background:#ffbd2e"></div><div class="mdot" style="background:#28ca41"></div>
+              <div class="mockup-url">slack.com/oauth/v2/authorize — 채널 선택</div>
+            </div>
+            <div style="background:#fff;padding:20px;border-radius:0 0 12px 12px">
+              <div style="font-size:14px;font-weight:700;color:#1d1c1d;margin-bottom:12px">MeetNotes가 회의록을 게시할 채널을 선택하세요</div>
+              <div style="background:#f1f2f3;border:1px solid #ddd;border-radius:4px;padding:8px 12px;font-size:13px;color:#1d1c1d;margin-bottom:14px"># 회의록 ▾</div>
+              <div style="background:#611f69;color:#fff;text-align:center;padding:10px;border-radius:4px;font-size:13px;font-weight:600;cursor:default">허용</div>
+            </div>
+          </div>
+        </div>
+      </div>
+      <div class="step">
+        <div class="step-left"><div class="step-num">4</div><div class="step-line"></div></div>
+        <div class="step-content">
+          <h4>Webhook URL 복사</h4>
+          <p>생성된 Webhook URL (<code>https://hooks.slack.com/services/···/···/···</code>) 을 복사합니다.</p>
+          <div class="mockup" style="margin-top:10px">
+            <div class="mockup-bar">
+              <div class="mdot" style="background:#ff5f57"></div><div class="mdot" style="background:#ffbd2e"></div><div class="mdot" style="background:#28ca41"></div>
+              <div class="mockup-url">api.slack.com/apps/.../incoming-webhooks</div>
+            </div>
+            <div style="background:#1a1d21;padding:16px">
+              <div style="font-size:11px;color:#8c8f93;margin-bottom:6px">Webhook URL</div>
+              <div style="display:flex;gap:8px;align-items:center">
+                <div style="background:#222529;border:1px solid #3e4044;border-radius:4px;padding:8px 12px;font-size:11px;color:#d1d2d3;flex:1;font-family:monospace;overflow:hidden;text-overflow:ellipsis;white-space:nowrap">https://hooks.slack.com/services/[워크스페이스ID]/[채널ID]/[고유토큰]</div>
+                <div style="background:#007a5a;color:#fff;padding:7px 12px;border-radius:4px;font-size:11px;font-weight:600;cursor:default;white-space:nowrap">Copy</div>
+              </div>
+            </div>
+          </div>
+        </div>
+      </div>
+      <div class="step">
+        <div class="step-left"><div class="step-num">5</div></div>
+        <div class="step-content">
+          <h4>앱에서 Webhook URL 등록</h4>
+          <p>MeetNotes 앱 → 회의 설정 화면 → 💬 <strong>Slack 연동 → ⚙️</strong> 아이콘 클릭 → Webhook URL 입력 후 <strong>저장</strong></p>
+          <div class="mockup" style="margin-top:10px">
+            <div class="mockup-bar">
+              <div class="mdot" style="background:#ff5f57"></div><div class="mdot" style="background:#ffbd2e"></div><div class="mdot" style="background:#28ca41"></div>
+              <div class="mockup-url">localhost:3000</div>
+            </div>
+            <div style="padding:16px;background:#181818">
+              <div style="background:var(--bg-elevated);border:1px solid var(--border);border-radius:8px;padding:14px">
+                <div style="display:flex;align-items:center;gap:8px;margin-bottom:12px">
+                  <span style="font-size:15px">💬</span>
+                  <span style="font-size:13px;font-weight:700">Slack 연동</span>
+                  <span style="margin-left:auto;background:rgba(243,114,127,.15);color:#f3727f;font-size:10px;font-weight:700;padding:2px 8px;border-radius:9999px">미연결</span>
+                  <span style="font-size:16px;cursor:default;color:var(--text-secondary)">⚙️</span>
+                </div>
+                <div style="background:var(--bg-card);border:1px solid var(--border);border-radius:6px;padding:12px">
+                  <span class="app-label">Webhook URL</span>
+                  <div style="display:flex;gap:8px;margin-bottom:10px">
+                    <div class="app-input" style="flex:1;display:flex;align-items:center;font-size:10px;color:#aaa">https://hooks.slack.com/services/···/···/···</div>
+                  </div>
+                  <span class="app-label">기본 채널</span>
+                  <div style="display:flex;gap:8px;margin-bottom:10px">
+                    <div class="app-input" style="width:160px;display:flex;align-items:center;font-size:12px;color:#aaa">#회의록</div>
+                  </div>
+                  <button class="app-btn-green" style="font-size:10px">저장</button>
+                </div>
+              </div>
+            </div>
+          </div>
+        </div>
+      </div>
+    </div>
+  </div>
+
+  <!-- ── Step 6: .env.local 완성 ── -->
+  <div class="card" style="border-left:3px solid var(--purple);margin-bottom:20px">
+    <div style="display:flex;align-items:center;gap:10px;margin-bottom:14px">
+      <span class="badge purple">STEP 6</span>
+      <h3 style="margin:0">.env.local 최종 완성본</h3>
+    </div>
+    <p style="margin-bottom:14px">앞의 단계에서 발급한 키들을 모두 채우면 아래와 같은 형태가 됩니다.</p>
+    <div class="code-label">.env.local — 프로젝트 루트</div>
+    <pre><span class="cm"># ✅ 필수: Deepgram 음성 전사 (Step 2에서 발급)</span>
+<span class="pp">DEEPGRAM_API_KEY</span>=<span class="st">e048e1a853d44bf0364e78a82250f1a0xxxxx</span>
+
+<span class="cm"># ✅ 필수: Google Gemini AI 회의록 생성 (Step 3에서 발급)</span>
+<span class="pp">GOOGLE_AI_API_KEY</span>=<span class="st">AIzaSyAYMFpiP1bBdHLzDd7kozRPo-pHBjPxxxxx</span>
+
+<span class="cm"># 앱 URL (로컬 개발 시 기본값 사용)</span>
+<span class="pp">NEXT_PUBLIC_APP_URL</span>=<span class="st">http://localhost:3000</span>
+
+<span class="cm"># ── 아래는 UI에서 설정하므로 .env.local 불필요 ──────────────────────────
+# Slack Webhook URL → 회의 설정 화면 ⚙️에서 입력 (data/slack-settings.json에 저장)
+# Google Apps Script URL → 회의 설정 화면 📅에서 입력 (data/calendar-settings.json에 저장)</span></pre>
+    <div class="callout green" style="margin-top:10px;margin-bottom:0">
+      <div class="callout-icon">🔒</div>
+      <div><strong>.env.local은 절대 Git에 커밋하지 마세요.</strong> <code>.gitignore</code>에 이미 포함되어 있습니다. API 키가 외부에 노출되면 즉시 해당 서비스 콘솔에서 키를 삭제하고 재발급하세요.</div>
+    </div>
+  </div>
+
+  <!-- ── Step 7: 앱 실행 ── -->
+  <div class="card" style="border-left:3px solid var(--green);margin-bottom:20px">
+    <div style="display:flex;align-items:center;gap:10px;margin-bottom:14px">
+      <span class="badge green">STEP 7</span>
+      <h3 style="margin:0">앱 실행 & 동작 확인</h3>
+    </div>
+    <div class="steps">
+      <div class="step">
+        <div class="step-left"><div class="step-num">1</div><div class="step-line"></div></div>
+        <div class="step-content">
+          <h4>개발 서버 시작</h4>
+          <pre><span class="fn">npm</span> run dev</pre>
+          <p style="margin-top:6px">터미널에 <code>✓ Ready in 2.3s</code> 메시지가 뜨면 브라우저에서 <a href="http://localhost:3000" style="color:var(--green)">localhost:3000</a> 접속</p>
+        </div>
+      </div>
+      <div class="step">
+        <div class="step-left"><div class="step-num">2</div><div class="step-line"></div></div>
+        <div class="step-content">
+          <h4>대면 회의 녹음 테스트 (Deepgram 키 확인)</h4>
+          <p>회의 설정 → <strong>대면 회의</strong> 선택 → 제목 입력 → <strong>다음 단계로</strong> → 마이크 권한 허용 → 실시간 자막 확인</p>
+          <div class="callout green" style="margin-top:8px">
+            <div class="callout-icon">✅</div>
+            <div>자막이 실시간으로 나오면 <code>DEEPGRAM_API_KEY</code> 설정 완료</div>
+          </div>
+        </div>
+      </div>
+      <div class="step">
+        <div class="step-left"><div class="step-num">3</div><div class="step-line"></div></div>
+        <div class="step-content">
+          <h4>AI 회의록 생성 테스트 (Gemini 키 확인)</h4>
+          <p>녹음 후 <strong>종료</strong> → "AI 분석 중..." 스피너 확인 → 회의록 결과 화면 표시 확인</p>
+          <div class="callout green" style="margin-top:8px">
+            <div class="callout-icon">✅</div>
+            <div>결정사항·액션 아이템이 생성되면 <code>GOOGLE_AI_API_KEY</code> 설정 완료</div>
+          </div>
+        </div>
+      </div>
+      <div class="step">
+        <div class="step-left"><div class="step-num">4</div><div class="step-line"></div></div>
+        <div class="step-content">
+          <h4>Slack 전송 테스트</h4>
+          <p>회의록 화면 → <strong>Slack 전송</strong> → 채널 확인 → <strong>전송</strong> → 해당 Slack 채널에서 메시지 수신 확인</p>
+          <div class="callout green" style="margin-top:8px">
+            <div class="callout-icon">✅</div>
+            <div>Slack 채널에 Block Kit 메시지가 오면 전체 설정 완료 🎉</div>
+          </div>
+        </div>
+      </div>
+    </div>
+  </div>
+
+  <!-- ── 최종 체크리스트 ── -->
+  <div class="card">
+    <h3 style="margin-bottom:14px">🏁 세팅 완료 체크리스트</h3>
+    <div class="grid-2">
+      <div>
+        <div style="font-size:11px;font-weight:700;color:var(--text-muted);text-transform:uppercase;letter-spacing:1.5px;margin-bottom:10px">API 키 & 파일</div>
+        <ul class="checklist">
+          <li><code>DEEPGRAM_API_KEY</code> → .env.local 입력 완료</li>
+          <li><code>GOOGLE_AI_API_KEY</code> → .env.local 입력 완료</li>
+          <li><code>NEXT_PUBLIC_APP_URL</code> → .env.local 입력 완료</li>
+          <li><code>.env.local</code> → .gitignore 포함 확인</li>
+        </ul>
+      </div>
+      <div>
+        <div style="font-size:11px;font-weight:700;color:var(--text-muted);text-transform:uppercase;letter-spacing:1.5px;margin-bottom:10px">앱 내 UI 설정</div>
+        <ul class="checklist">
+          <li>Google Apps Script URL → 회의 설정 화면 📅에서 저장 <span class="badge blue" style="margin-left:4px">선택</span></li>
+          <li>Slack Webhook URL → 회의 설정 화면 ⚙️에서 저장</li>
+          <li>🔄 캘린더 새로고침 → 내 일정 불러오기 확인 <span class="badge blue" style="margin-left:4px">선택</span></li>
+        </ul>
+      </div>
+    </div>
+    <div class="callout purple" style="margin-top:14px;margin-bottom:0">
+      <div class="callout-icon">🚀</div>
+      <div><strong>data/ 폴더는 자동 생성됩니다.</strong> Apps Script URL과 Slack Webhook URL은 앱 UI에서 저장하면 <code>data/calendar-settings.json</code>, <code>data/slack-settings.json</code>에 자동으로 기록되며, 서버 재시작 후에도 유지됩니다.</div>
+    </div>
+  </div>
+</section>
+
+
+<!-- ═══════════════════════════════════════════════════ -->
+<!-- 1. 아이디어회의 -->
+<!-- ═══════════════════════════════════════════════════ -->
+<section class="section" id="ideation">
+  <div class="section-header">
+    <div class="section-badge green">01 · 아이디어회의</div>
+    <h2>왜 만들었나</h2>
+  </div>
+
+  <div class="callout green">
+    <div class="callout-icon">💡</div>
+    <div><strong>핵심 문제:</strong> 회의가 끝나면 "이 결정 누가 한다고 했더라?" "다음 스텝이 뭐였더라?" — 매번 기억에 의존하거나, 누군가 수작업으로 정리해야 했어요. <strong>MeetNotes는 회의를 녹음하기만 하면 AI가 회의록·액션 아이템·다음 스텝을 자동으로 작성</strong>하는 서비스입니다.</div>
+  </div>
+
+  <div class="grid-2">
+    <div class="card">
+      <h3>😩 Before</h3>
+      <p>회의 중 누군가 받아쓰기 → 회의 후 정리 → Slack 복붙. 30분 회의에 20분 추가 작업. 정리 담당자에게 부담 집중. 내용 누락·오기 잦음.</p>
+    </div>
+    <div class="card">
+      <h3>✨ After</h3>
+      <p>회의 시작 버튼 → 자동 녹음·전사 → 종료 버튼 → 3초 후 AI 회의록 완성. 결정사항·액션 아이템·다음 스텝 자동 분류. Slack 원클릭 전송.</p>
+    </div>
+  </div>
+
+  <div class="card">
+    <h3>🎯 서비스 핵심 가치 3가지</h3>
+    <div class="grid-3" style="margin-top:14px">
+      <div style="background:var(--bg-elevated);border-radius:8px;padding:16px;text-align:center">
+        <div style="font-size:28px;margin-bottom:8px">🎙</div>
+        <div style="font-size:13px;font-weight:700;margin-bottom:4px">자동 전사</div>
+        <div style="font-size:12px;color:var(--text-secondary)">Deepgram Nova-2<br>한국어 다화자 분리<br>실시간 자막</div>
+      </div>
+      <div style="background:var(--bg-elevated);border-radius:8px;padding:16px;text-align:center">
+        <div style="font-size:28px;margin-bottom:8px">✨</div>
+        <div style="font-size:13px;font-weight:700;margin-bottom:4px">AI 회의록</div>
+        <div style="font-size:12px;color:var(--text-secondary)">Gemini 2.5 Flash<br>결정·액션·키워드<br>다음 스텝 AI 제안</div>
+      </div>
+      <div style="background:var(--bg-elevated);border-radius:8px;padding:16px;text-align:center">
+        <div style="font-size:28px;margin-bottom:8px">💬</div>
+        <div style="font-size:13px;font-weight:700;margin-bottom:4px">즉시 공유</div>
+        <div style="font-size:12px;color:var(--text-secondary)">Slack 원클릭 전송<br>TXT 파일 내보내기<br>히스토리 자동 보관</div>
+      </div>
+    </div>
+  </div>
+
+  <div class="card">
+    <h3>📐 전체 서비스 플로우</h3>
+    <div class="flow" style="margin-top:14px">
+      <div class="fnode active"><div class="ficon">⚙️</div><div class="flabel">회의 설정</div></div>
+      <div class="farrow green">→</div>
+      <div class="fnode active"><div class="ficon">🎙</div><div class="flabel">녹음·전사</div></div>
+      <div class="farrow green">→</div>
+      <div class="fnode active"><div class="ficon">✨</div><div class="flabel">AI 분석</div></div>
+      <div class="farrow green">→</div>
+      <div class="fnode active"><div class="ficon">📋</div><div class="flabel">회의록 편집</div></div>
+      <div class="farrow green">→</div>
+      <div class="fnode active"><div class="ficon">💬</div><div class="flabel">Slack 전송</div></div>
+      <div class="farrow green">→</div>
+      <div class="fnode active"><div class="ficon">📁</div><div class="flabel">히스토리</div></div>
+    </div>
+  </div>
+</section>
+
+
+<!-- ═══════════════════════════════════════════════════ -->
+<!-- 2. 기획 -->
+<!-- ═══════════════════════════════════════════════════ -->
+<section class="section" id="planning">
+  <div class="section-header">
+    <div class="section-badge blue">02 · 기획</div>
+    <h2>화면별 기능 명세</h2>
+  </div>
+
+  <!-- Screen 1: Setup -->
+  <div class="card" style="border-left:3px solid var(--green);margin-bottom:20px">
+    <div style="display:flex;align-items:center;gap:10px;margin-bottom:14px">
+      <span class="badge green">SCREEN 1</span>
+      <h3 style="margin:0">회의 설정 (SetupScreen)</h3>
+    </div>
+    <div class="grid-2">
+      <div>
+        <p style="margin-bottom:10px">회의 시작 전 정보를 입력하는 화면. Google Calendar 연동으로 일정을 선택하면 제목·참석자가 자동 입력됩니다.</p>
+        <ul style="list-style:none;display:flex;flex-direction:column;gap:6px;margin-top:10px">
+          <li style="font-size:13px;color:var(--text-secondary);display:flex;gap:8px"><span style="color:var(--green)">▸</span>회의 제목 입력 (필수)</li>
+          <li style="font-size:13px;color:var(--text-secondary);display:flex;gap:8px"><span style="color:var(--green)">▸</span>회의 유형: 대면(마이크) / 온라인(파일 업로드)</li>
+          <li style="font-size:13px;color:var(--text-secondary);display:flex;gap:8px"><span style="color:var(--green)">▸</span>참여자 등록 — AI 발언자 구분 정확도 향상</li>
+          <li style="font-size:13px;color:var(--text-secondary);display:flex;gap:8px"><span style="color:var(--green)">▸</span>📅 Google Calendar 연동 — 일정 원클릭 선택</li>
+          <li style="font-size:13px;color:var(--text-secondary);display:flex;gap:8px"><span style="color:var(--green)">▸</span>💬 Slack Webhook 연동 설정</li>
+          <li style="font-size:13px;color:var(--text-secondary);display:flex;gap:8px"><span style="color:var(--green)">▸</span>AI 분석 옵션 토글 (발언자 구분, 다음 스텝 등)</li>
+        </ul>
+      </div>
+      <div class="mockup">
+        <div class="mockup-bar">
+          <div class="mdot" style="background:#ff5f57"></div>
+          <div class="mdot" style="background:#ffbd2e"></div>
+          <div class="mdot" style="background:#28ca41"></div>
+          <div class="mockup-url">localhost:3000</div>
+        </div>
+        <div style="padding:14px">
+          <div class="app-card" style="padding:12px">
+            <div style="font-size:13px;font-weight:700;margin-bottom:12px">새 회의 시작</div>
+            <span class="app-label">회의 제목 *</span>
+            <div class="app-input" style="display:flex;align-items:center;font-size:12px;color:var(--text-muted);margin-bottom:10px">Q3 기능 우선순위 조정</div>
+            <span class="app-label">회의 유형</span>
+            <div style="display:grid;grid-template-columns:1fr 1fr;gap:8px;margin-bottom:10px">
+              <div style="background:var(--green-dim);border:1px solid var(--green);border-radius:6px;padding:10px;text-align:center">
+                <div style="font-size:18px">👥</div>
+                <div style="font-size:11px;font-weight:700;color:var(--green)">대면 회의</div>
+              </div>
+              <div style="background:var(--bg-elevated);border-radius:6px;padding:10px;text-align:center">
+                <div style="font-size:18px">🎥</div>
+                <div style="font-size:11px;font-weight:700;color:var(--text-secondary)">온라인 회의</div>
+              </div>
+            </div>
+            <button class="app-btn-green" style="width:100%;justify-content:center;font-size:11px">다음 단계로 →</button>
+          </div>
+        </div>
+      </div>
+    </div>
+  </div>
+
+  <!-- Screen 2: Recording -->
+  <div class="card" style="border-left:3px solid var(--red);margin-bottom:20px">
+    <div style="display:flex;align-items:center;gap:10px;margin-bottom:14px">
+      <span class="badge red">SCREEN 2</span>
+      <h3 style="margin:0">녹음·전사 (RecordingScreen)</h3>
+    </div>
+    <div class="grid-2">
+      <div>
+        <p style="margin-bottom:10px">실시간 녹음 & 전사가 이루어지는 화면. 대면 회의는 마이크, 온라인 회의는 파일 업로드로 동작합니다.</p>
+        <ul style="list-style:none;display:flex;flex-direction:column;gap:6px;margin-top:10px">
+          <li style="font-size:13px;color:var(--text-secondary);display:flex;gap:8px"><span style="color:var(--red)">▸</span><strong>대면:</strong> Deepgram WebSocket 실시간 스트리밍 전사</li>
+          <li style="font-size:13px;color:var(--text-secondary);display:flex;gap:8px"><span style="color:var(--red)">▸</span><strong>온라인:</strong> MP3/MP4/WAV/M4A 파일 업로드 후 전사</li>
+          <li style="font-size:13px;color:var(--text-secondary);display:flex;gap:8px"><span style="color:var(--red)">▸</span>발언자 자동 구분 (Speaker 0, 1, 2...) + 이름 수정 가능</li>
+          <li style="font-size:13px;color:var(--text-secondary);display:flex;gap:8px"><span style="color:var(--red)">▸</span>실시간 자막 스크롤 표시</li>
+          <li style="font-size:13px;color:var(--text-secondary);display:flex;gap:8px"><span style="color:var(--red)">▸</span>발언 통계 패널 (발언자별 단어 수, 점유율)</li>
+          <li style="font-size:13px;color:var(--text-secondary);display:flex;gap:8px"><span style="color:var(--red)">▸</span>일시정지 / 재개 / 종료</li>
+          <li style="font-size:13px;color:var(--text-secondary);display:flex;gap:8px"><span style="color:var(--red)">▸</span>종료 시 자동으로 AI 분석 시작</li>
+        </ul>
+      </div>
+      <div class="mockup">
+        <div class="mockup-bar">
+          <div class="mdot" style="background:#ff5f57"></div>
+          <div class="mdot" style="background:#ffbd2e"></div>
+          <div class="mdot" style="background:#28ca41"></div>
+          <div class="mockup-url">localhost:3000</div>
+        </div>
+        <div style="background:#181818;padding:10px 14px;border-bottom:1px solid var(--border);display:flex;justify-content:space-between;align-items:center">
+          <div style="display:flex;align-items:center;gap:8px">
+            <div style="background:#3a1a1a;color:#f3727f;font-size:11px;font-weight:700;padding:4px 12px;border-radius:9999px;display:flex;align-items:center;gap:5px">
+              <div style="width:6px;height:6px;border-radius:50%;background:#f3727f"></div>
+              REC
+            </div>
+            <span style="font-size:17px;font-weight:700">00:24:13</span>
+          </div>
+          <div style="display:flex;gap:6px">
+            <button class="app-btn-pill">⏸ 일시정지</button>
+            <button class="app-btn-danger">⏹ 종료</button>
+          </div>
+        </div>
+        <div style="padding:14px;display:grid;grid-template-columns:1fr auto;gap:10px">
+          <div>
+            <div style="font-size:10px;font-weight:700;color:var(--text-muted);text-transform:uppercase;letter-spacing:1.4px;margin-bottom:8px">실시간 자막</div>
+            <div style="display:flex;flex-direction:column;gap:8px">
+              <div style="display:flex;gap:7px">
+                <div style="width:22px;height:22px;border-radius:50%;background:#1a3a1a;color:#1ed760;font-size:9px;font-weight:700;display:flex;align-items:center;justify-content:center;flex-shrink:0">T</div>
+                <div style="font-size:11px;color:#cbcbcb;background:#181818;border-radius:0 5px 5px 5px;padding:7px 10px;line-height:1.5">이번 스프린트에서 A 기능을 먼저 하는 게 맞다고 봐요.</div>
+              </div>
+              <div style="display:flex;gap:7px">
+                <div style="width:22px;height:22px;border-radius:50%;background:#1a2a3a;color:#539df5;font-size:9px;font-weight:700;display:flex;align-items:center;justify-content:center;flex-shrink:0">D</div>
+                <div style="font-size:11px;color:#cbcbcb;background:#181818;border-radius:0 5px 5px 5px;padding:7px 10px;line-height:1.5;border-left:2px solid #1ed760">그러면 B 기능은 다음 스프린트로<span style="display:inline-block;width:2px;height:11px;background:#1ed760;margin-left:2px;vertical-align:middle"></span></div>
+              </div>
+            </div>
+          </div>
+          <div style="width:64px;background:var(--bg-elevated);border-radius:6px;padding:8px;font-size:9px">
+            <div style="color:var(--text-muted);text-transform:uppercase;letter-spacing:1px;margin-bottom:6px">발언자</div>
+            <div style="margin-bottom:5px">
+              <div style="font-size:10px;font-weight:700;color:var(--green)">Terry</div>
+              <div style="height:3px;background:#2a2a2a;border-radius:2px;margin-top:3px"><div style="width:60%;height:3px;background:var(--green);border-radius:2px"></div></div>
+            </div>
+            <div>
+              <div style="font-size:10px;font-weight:700;color:var(--blue)">Daniel</div>
+              <div style="height:3px;background:#2a2a2a;border-radius:2px;margin-top:3px"><div style="width:40%;height:3px;background:var(--blue);border-radius:2px"></div></div>
+            </div>
+          </div>
+        </div>
+      </div>
+    </div>
+  </div>
+
+  <!-- Screen 3: AI Analysis + Review -->
+  <div class="card" style="border-left:3px solid var(--blue);margin-bottom:20px">
+    <div style="display:flex;align-items:center;gap:10px;margin-bottom:14px">
+      <span class="badge blue">SCREEN 3</span>
+      <h3 style="margin:0">AI 분석 → 회의록 편집 (ReviewScreen)</h3>
+    </div>
+    <div class="grid-2">
+      <div>
+        <p style="margin-bottom:10px">녹음 종료 직후 Gemini AI가 트랜스크립트를 분석해 구조화된 회의록을 생성합니다. 생성 후 직접 편집도 가능합니다.</p>
+        <div style="margin-top:12px;display:flex;flex-direction:column;gap:8px">
+          <div style="background:var(--bg-elevated);border-radius:6px;padding:10px 14px;display:flex;gap:10px;align-items:flex-start">
+            <span style="color:var(--blue);font-size:13px;flex-shrink:0">📄</span>
+            <div>
+              <div style="font-size:12px;font-weight:700;margin-bottom:2px">detail — 전체 요약</div>
+              <div style="font-size:11px;color:var(--text-secondary)">회의 내용을 3-5문장으로 서술한 요약</div>
+            </div>
+          </div>
+          <div style="background:var(--bg-elevated);border-radius:6px;padding:10px 14px;display:flex;gap:10px;align-items:flex-start">
+            <span style="color:var(--green);font-size:13px;flex-shrink:0">✅</span>
+            <div>
+              <div style="font-size:12px;font-weight:700;margin-bottom:2px">core — 핵심 결정사항</div>
+              <div style="font-size:11px;color:var(--text-secondary)">번호 매긴 결정 목록, 직접 편집 가능</div>
+            </div>
+          </div>
+          <div style="background:var(--bg-elevated);border-radius:6px;padding:10px 14px;display:flex;gap:10px;align-items:flex-start">
+            <span style="color:var(--orange);font-size:13px;flex-shrink:0">☐</span>
+            <div>
+              <div style="font-size:12px;font-weight:700;margin-bottom:2px">actions — 액션 아이템</div>
+              <div style="font-size:11px;color:var(--text-secondary)">담당자·기한·우선순위 포함, 항목 추가/삭제</div>
+            </div>
+          </div>
+          <div style="background:var(--bg-elevated);border-radius:6px;padding:10px 14px;display:flex;gap:10px;align-items:flex-start">
+            <span style="color:var(--purple);font-size:13px;flex-shrink:0">🏷</span>
+            <div>
+              <div style="font-size:12px;font-weight:700;margin-bottom:2px">keywords — 키워드</div>
+              <div style="font-size:11px;color:var(--text-secondary)">핵심 키워드 칩, 클릭으로 제거</div>
+            </div>
+          </div>
+          <div style="background:var(--bg-elevated);border-radius:6px;padding:10px 14px;display:flex;gap:10px;align-items:flex-start">
+            <span style="color:var(--red);font-size:13px;flex-shrink:0">🚀</span>
+            <div>
+              <div style="font-size:12px;font-weight:700;margin-bottom:2px">nextSteps — AI 제안</div>
+              <div style="font-size:11px;color:var(--text-secondary)">다음 회의/작업 제안 3개 + 이유</div>
+            </div>
+          </div>
+        </div>
+        <div style="margin-top:12px;display:flex;gap:6px;flex-wrap:wrap">
+          <span class="badge blue">📋 Slack 복사</span>
+          <span class="badge orange">📥 TXT 내보내기</span>
+          <span class="badge green">💬 Slack 전송</span>
+          <span class="badge purple">📁 저장 완료</span>
+        </div>
+      </div>
+      <div class="mockup">
+        <div class="mockup-bar">
+          <div class="mdot" style="background:#ff5f57"></div>
+          <div class="mdot" style="background:#ffbd2e"></div>
+          <div class="mdot" style="background:#28ca41"></div>
+          <div class="mockup-url">localhost:3000</div>
+        </div>
+        <div style="padding:14px">
+          <div style="font-size:11px;font-weight:700;color:var(--text-secondary);text-transform:uppercase;letter-spacing:1.4px;margin-bottom:8px">Q3 기능 우선순위 조정</div>
+          <!-- detail -->
+          <div style="background:var(--bg-elevated);border-radius:6px;padding:10px 12px;margin-bottom:7px">
+            <div style="font-size:9px;font-weight:700;color:var(--blue);text-transform:uppercase;letter-spacing:1.5px;margin-bottom:5px">📄 전체 요약</div>
+            <div style="font-size:11px;color:#cbcbcb;line-height:1.6">이번 회의에서 Q3 스프린트 기능 우선순위를 논의했습니다. A 기능을 먼저 진행하고 B 기능은 다음 스프린트로 이동하기로 결정했습니다.</div>
+          </div>
+          <!-- core -->
+          <div style="background:var(--bg-elevated);border-radius:6px;padding:10px 12px;margin-bottom:7px">
+            <div style="font-size:9px;font-weight:700;color:var(--green);text-transform:uppercase;letter-spacing:1.5px;margin-bottom:5px">✅ 결정사항</div>
+            <div style="font-size:11px;color:#cbcbcb;line-height:1.7">1. A 기능 이번 스프린트 우선 진행<br>2. B 기능 다음 스프린트로 이동</div>
+          </div>
+          <!-- keywords -->
+          <div style="margin-bottom:7px;display:flex;gap:5px;flex-wrap:wrap">
+            <span style="background:#1a2a3a;color:var(--blue);font-size:10px;padding:3px 8px;border-radius:9999px">스프린트</span>
+            <span style="background:#1a2a3a;color:var(--blue);font-size:10px;padding:3px 8px;border-radius:9999px">우선순위</span>
+            <span style="background:#1a2a3a;color:var(--blue);font-size:10px;padding:3px 8px;border-radius:9999px">A기능</span>
+          </div>
+          <!-- actions -->
+          <div style="background:var(--bg-elevated);border-radius:6px;padding:10px 12px">
+            <div style="font-size:9px;font-weight:700;color:var(--orange);text-transform:uppercase;letter-spacing:1.5px;margin-bottom:5px">☐ 액션 아이템</div>
+            <div style="font-size:11px;color:#cbcbcb;line-height:1.7">☐ A 기능 설계 문서 작성 — <span style="color:var(--blue)">Terry</span> · 이번 주 내<br>☐ B 기능 백로그 이동 — <span style="color:var(--blue)">Daniel</span> · 내일까지</div>
+          </div>
+        </div>
+      </div>
+    </div>
+  </div>
+
+  <!-- Screen 4: Slack -->
+  <div class="card" style="border-left:3px solid var(--orange);margin-bottom:20px">
+    <div style="display:flex;align-items:center;gap:10px;margin-bottom:14px">
+      <span class="badge orange">SCREEN 4</span>
+      <h3 style="margin:0">Slack 전송 (SlackScreen)</h3>
+    </div>
+    <div class="grid-2">
+      <div>
+        <p style="margin-bottom:10px">Incoming Webhook을 이용해 회의록을 Slack 채널로 전송하는 화면입니다.</p>
+        <ul style="list-style:none;display:flex;flex-direction:column;gap:6px;margin-top:10px">
+          <li style="font-size:13px;color:var(--text-secondary);display:flex;gap:8px"><span style="color:var(--orange)">▸</span>전송 채널 선택</li>
+          <li style="font-size:13px;color:var(--text-secondary);display:flex;gap:8px"><span style="color:var(--orange)">▸</span>포맷: 전체 / 간단 / 액션만</li>
+          <li style="font-size:13px;color:var(--text-secondary);display:flex;gap:8px"><span style="color:var(--orange)">▸</span>전송 옵션 토글 (멘션, 트랜스크립트 첨부 등)</li>
+          <li style="font-size:13px;color:var(--text-secondary);display:flex;gap:8px"><span style="color:var(--orange)">▸</span>Slack 다크모드 UI 미리보기</li>
+          <li style="font-size:13px;color:var(--text-secondary);display:flex;gap:8px"><span style="color:var(--orange)">▸</span>전송 성공 시 히스토리에 Slack 전송 표시</li>
+        </ul>
+      </div>
+      <div class="mockup">
+        <div class="mockup-bar">
+          <div class="mdot" style="background:#ff5f57"></div>
+          <div class="mdot" style="background:#ffbd2e"></div>
+          <div class="mdot" style="background:#28ca41"></div>
+          <div class="mockup-url">localhost:3000</div>
+        </div>
+        <div style="padding:14px">
+          <div style="font-size:10px;font-weight:700;color:var(--text-muted);text-transform:uppercase;letter-spacing:1.4px;margin-bottom:8px">Slack 미리보기</div>
+          <div class="slack-msg">
+            <div style="display:flex;gap:8px">
+              <div style="width:30px;height:30px;border-radius:6px;background:var(--green);display:flex;align-items:center;justify-content:center;flex-shrink:0">🎙</div>
+              <div>
+                <div class="slack-name">MeetNotes <span class="slack-app-badge">APP</span> <span style="font-size:11px;color:#8c8f93;font-weight:400">방금 전</span></div>
+                <div class="slack-body">
+                  <div class="slack-header">📋 [회의록] Q3 기능 우선순위 조정</div>
+                  <div class="slack-meta">📅 2026.5.22  ⏱ 24분  👥 Terry, Daniel, Jenny</div>
+                  <div class="slack-section"><strong>결정사항</strong><br>• A 기능 이번 스프린트 우선 진행<br>• B 기능 다음 스프린트로 이동</div>
+                  <div class="slack-section"><strong>액션 아이템</strong><br>☐ A 기능 설계 문서 — <span style="color:#539df5">@Terry</span> · 이번 주 내</div>
+                  <span class="slack-kw">스프린트</span><span class="slack-kw">우선순위</span><span class="slack-kw">A기능</span>
+                </div>
+              </div>
+            </div>
+          </div>
+          <button class="app-btn-green" style="width:100%;justify-content:center;margin-top:10px;font-size:11px">#meeting-notes 에 전송하기</button>
+        </div>
+      </div>
+    </div>
+  </div>
+
+  <!-- Screen 5: History -->
+  <div class="card" style="border-left:3px solid var(--purple)">
+    <div style="display:flex;align-items:center;gap:10px;margin-bottom:10px">
+      <span class="badge purple">SCREEN 5</span>
+      <h3 style="margin:0">히스토리 (HistoryScreen)</h3>
+    </div>
+    <p>완료된 회의록 목록 · 전체 내용 펼치기 · Slack 전송 여부 표시 · 아카이브 처리. Supabase에 영구 저장.</p>
+  </div>
+</section>
+
+
+<!-- ═══════════════════════════════════════════════════ -->
+<!-- 3. 디자인 -->
+<!-- ═══════════════════════════════════════════════════ -->
+<section class="section" id="design">
+  <div class="section-header">
+    <div class="section-badge orange">03 · 디자인</div>
+    <h2>디자인 시스템</h2>
+  </div>
+
+  <div class="callout blue">
+    <div class="callout-icon">🎨</div>
+    <div>MeetNotes는 Spotify 스타일의 <strong>다크 테마</strong>를 기반으로 합니다. 배경은 완전한 블랙에 가깝고, 주요 액션은 <strong style="color:var(--green)">#1ed760 그린</strong>으로 강조합니다. 모든 토큰은 <code>app/globals.css</code>의 CSS 변수로 관리됩니다.</div>
+  </div>
+
+  <h3 style="font-size:12px;color:var(--text-secondary);font-weight:700;text-transform:uppercase;letter-spacing:1.5px;margin-bottom:12px">Color Tokens</h3>
+  <table class="ttable" style="margin-bottom:24px">
+    <tr><th>Token</th><th>Value</th><th></th><th>용도</th></tr>
+    <tr><td style="font-family:monospace;color:var(--blue)">--bg-base</td><td style="font-family:monospace;color:var(--text-muted)">#121212</td><td><span class="swatch" style="background:#121212"></span></td><td style="font-size:12px;color:var(--text-secondary)">전체 페이지 배경</td></tr>
+    <tr><td style="font-family:monospace;color:var(--blue)">--bg-surface</td><td style="font-family:monospace;color:var(--text-muted)">#181818</td><td><span class="swatch" style="background:#181818"></span></td><td style="font-size:12px;color:var(--text-secondary)">카드·패널 배경</td></tr>
+    <tr><td style="font-family:monospace;color:var(--blue)">--bg-elevated</td><td style="font-family:monospace;color:var(--text-muted)">#1f1f1f</td><td><span class="swatch" style="background:#1f1f1f"></span></td><td style="font-size:12px;color:var(--text-secondary)">입력창·버튼·이벤트 아이템</td></tr>
+    <tr><td style="font-family:monospace;color:var(--blue)">--green</td><td style="font-family:monospace;color:var(--text-muted)">#1ed760</td><td><span class="swatch" style="background:#1ed760"></span></td><td style="font-size:12px;color:var(--text-secondary)">주요 CTA · Active · REC 중 아님</td></tr>
+    <tr><td style="font-family:monospace;color:var(--blue)">--green-dim</td><td style="font-family:monospace;color:var(--text-muted)">#1a3a1a</td><td><span class="swatch" style="background:#1a3a1a"></span></td><td style="font-size:12px;color:var(--text-secondary)">Active 배경 · 호버 배경</td></tr>
+    <tr><td style="font-family:monospace;color:var(--blue)">--text-secondary</td><td style="font-family:monospace;color:var(--text-muted)">#b3b3b3</td><td><span class="swatch" style="background:#b3b3b3"></span></td><td style="font-size:12px;color:var(--text-secondary)">보조 텍스트 · 설명</td></tr>
+    <tr><td style="font-family:monospace;color:var(--blue)">--red</td><td style="font-family:monospace;color:var(--text-muted)">#f3727f</td><td><span class="swatch" style="background:#f3727f"></span></td><td style="font-size:12px;color:var(--text-secondary)">REC 표시 · Danger 버튼 · 에러</td></tr>
+    <tr><td style="font-family:monospace;color:var(--blue)">--orange</td><td style="font-family:monospace;color:var(--text-muted)">#ffa42b</td><td><span class="swatch" style="background:#ffa42b"></span></td><td style="font-size:12px;color:var(--text-secondary)">액션 아이템 · 경고</td></tr>
+    <tr><td style="font-family:monospace;color:var(--blue)">--blue</td><td style="font-family:monospace;color:var(--text-muted)">#539df5</td><td><span class="swatch" style="background:#539df5"></span></td><td style="font-size:12px;color:var(--text-secondary)">전체 요약 · Slack 멘션</td></tr>
+  </table>
+
+  <h3 style="font-size:12px;color:var(--text-secondary);font-weight:700;text-transform:uppercase;letter-spacing:1.5px;margin-bottom:12px">Component Classes (globals.css)</h3>
+  <div class="grid-2">
+    <div class="card">
+      <h3 style="margin-bottom:10px">버튼</h3>
+      <div style="display:flex;flex-direction:column;gap:8px">
+        <div style="display:flex;align-items:center;gap:10px">
+          <button class="app-btn-green" style="font-size:11px">btn-green</button>
+          <span style="font-size:11px;color:var(--text-secondary)">주요 CTA, 흑색 텍스트</span>
+        </div>
+        <div style="display:flex;align-items:center;gap:10px">
+          <button class="app-btn-pill">btn-pill</button>
+          <span style="font-size:11px;color:var(--text-secondary)">보조 버튼, 대문자</span>
+        </div>
+        <div style="display:flex;align-items:center;gap:10px">
+          <button class="app-btn-danger">btn-danger</button>
+          <span style="font-size:11px;color:var(--text-secondary)">종료·삭제 등 위험 액션</span>
+        </div>
+      </div>
+    </div>
+    <div class="card">
+      <h3 style="margin-bottom:10px">폼 요소</h3>
+      <div style="display:flex;flex-direction:column;gap:8px">
+        <div>
+          <span class="app-label">sp-label</span>
+          <div class="app-input" style="display:flex;align-items:center;font-size:12px">sp-input — 입력 필드</div>
+        </div>
+        <div style="display:flex;align-items:center;gap:10px;margin-top:4px">
+          <div class="app-toggle on"><div class="app-toggle-thumb"></div></div>
+          <div class="app-toggle"><div class="app-toggle-thumb"></div></div>
+          <span style="font-size:11px;color:var(--text-secondary)">sp-toggle (on/off)</span>
+        </div>
+      </div>
+    </div>
+  </div>
+
+  <div class="callout orange">
+    <div class="callout-icon">🔤</div>
+    <div><strong>타이포그래피:</strong> 시스템 폰트 <code>Helvetica Neue, Arial</code>. 레이블/버튼은 <code>text-transform: uppercase; letter-spacing: 1.4px</code>로 강조. 본문 13px / 보조 11-12px / 레이블 10px.</div>
+  </div>
+</section>
+
+
+<!-- ═══════════════════════════════════════════════════ -->
+<!-- 4. 개발 -->
+<!-- ═══════════════════════════════════════════════════ -->
+<section class="section" id="dev">
+  <div class="section-header">
+    <div class="section-badge purple">04 · 개발</div>
+    <h2>기술 스택 & 구현</h2>
+  </div>
+
+  <!-- 아키텍처 -->
+  <div class="card" style="margin-bottom:24px">
+    <h3 style="margin-bottom:14px">📐 전체 아키텍처</h3>
+    <pre><span class="cm">┌─────────────────────────────────────────────────────────┐
+│                    Next.js 14 (App Router)               │
+│  Client (React + Zustand)  │  Server (API Routes)        │
+│                            │                             │
+│  SetupScreen               │  POST /api/analyze          │
+│  RecordingScreen           │    └─ Gemini 2.5 Flash AI   │
+│  ReviewScreen              │  POST /api/transcribe/file  │
+│  SlackScreen               │    └─ Deepgram Nova-2       │
+│  HistoryScreen             │  GET|POST /api/calendar/*   │
+│                            │    └─ Apps Script           │
+│  useDeepgram (WebSocket)   │  POST /api/slack            │
+│    └─ Deepgram Streaming   │    └─ Incoming Webhook      │
+│  meetingStore (Zustand)    │  GET|POST|PATCH /api/meetings│
+│                            │    └─ Supabase DB           │
+└─────────────────────────────────────────────────────────┘</span></pre>
+  </div>
+
+  <!-- STT -->
+  <div class="card" style="border-left:3px solid var(--red);margin-bottom:20px">
+    <div style="display:flex;align-items:center;gap:10px;margin-bottom:12px">
+      <span class="badge red">STT</span>
+      <h3 style="margin:0">음성 인식 — Deepgram Nova-2</h3>
+    </div>
+    <div class="grid-2">
+      <div>
+        <div style="font-size:12px;font-weight:700;color:var(--text-secondary);margin-bottom:6px">대면 회의 — 실시간 WebSocket</div>
+        <p style="margin-bottom:12px">마이크 스트림을 Deepgram WebSocket에 연결. 발화 단위로 텍스트를 수신하고 <code>is_final</code>이 true일 때 확정 자막으로 저장합니다.</p>
+        <div class="code-label">lib/useDeepgram.ts — 핵심 연결 코드</div>
+        <pre><span class="cm">// Deepgram WebSocket 연결 설정</span>
+<span class="kw">const</span> socket = <span class="kw">new</span> <span class="tp">WebSocket</span>(
+  <span class="st">`wss://api.deepgram.com/v1/listen?</span>
+  <span class="st">language=ko&model=nova-2</span>
+  <span class="st">&diarize=true&punctuate=true</span>
+  <span class="st">&interim_results=true`</span>,
+  [<span class="st">'token'</span>, process.env.DEEPGRAM_API_KEY]
+)
+<span class="cm">// 마이크 스트림 → WebSocket 전송</span>
+mediaRecorder.<span class="fn">ondataavailable</span> = (e) => {
+  <span class="kw">if</span> (socket.readyState === <span class="tp">WebSocket</span>.OPEN)
+    socket.<span class="fn">send</span>(e.data)
+}</pre>
+      </div>
+      <div>
+        <div style="font-size:12px;font-weight:700;color:var(--text-secondary);margin-bottom:6px">온라인 회의 — 파일 업로드</div>
+        <p style="margin-bottom:12px">Zoom/Teams/Meet 녹화 파일(MP3·MP4·WAV 등)을 업로드하면 Deepgram REST API로 전사합니다.</p>
+        <div class="code-label">app/api/transcribe/file/route.ts</div>
+        <pre><span class="cm">// Deepgram REST API 호출</span>
+<span class="kw">const</span> response = <span class="kw">await</span> <span class="fn">fetch</span>(
+  <span class="st">'https://api.deepgram.com/v1/listen?</span>
+  <span class="st">language=ko&model=nova-2</span>
+  <span class="st">&diarize=true&utterances=true'</span>,
+  {
+    method: <span class="st">'POST'</span>,
+    headers: {
+      Authorization: <span class="st">`Token ${apiKey}`</span>,
+      <span class="st">'Content-Type'</span>: file.type
+    },
+    body: arrayBuffer
+  }
+)
+<span class="cm">// utterances 배열 → 발언자별 자막 추출</span></pre>
+      </div>
+    </div>
+    <div class="callout blue" style="margin-top:4px;margin-bottom:0">
+      <div class="callout-icon">ℹ️</div>
+      <div><strong>발언자 구분:</strong> <code>diarize=true</code> 파라미터로 Speaker 0, 1, 2... 자동 분리. 설정 화면에서 미리 등록한 참여자 이름과 매핑됩니다. RecordingScreen의 발언자 탭에서 이름을 수정하면 전체 자막에 즉시 반영됩니다.</div>
+    </div>
+  </div>
+
+  <!-- AI Analysis -->
+  <div class="card" style="border-left:3px solid var(--blue);margin-bottom:20px">
+    <div style="display:flex;align-items:center;gap:10px;margin-bottom:12px">
+      <span class="badge blue">AI</span>
+      <h3 style="margin:0">AI 회의록 작성 — Gemini 2.5 Flash ★ 핵심</h3>
+    </div>
+    <p style="margin-bottom:14px">회의 종료 후 전사된 트랜스크립트를 Gemini 2.5 Flash에 전달해 구조화된 JSON 회의록을 생성합니다. 응답을 JSON 모드로 강제해 파싱 실패를 방지합니다.</p>
+    <div class="code-label">app/api/analyze/route.ts — AI 프롬프트</div>
+    <pre><span class="kw">const</span> prompt = <span class="st">`당신은 회의록 전문 AI 작성자입니다.
+회의 제목: ${title}
+참여자: ${participants.join(', ')}
+트랜스크립트: ${transcript}
+
+다음 JSON 형식으로만 응답해주세요:
+{
+  "detail":    "전체 요약 3-5문장",
+  "core":      "핵심 결정사항 번호 목록",
+  "keywords":  ["키워드1", ..., "키워드8"],
+  "actions": [{
+    "id": "1", "text": "액션 내용",
+    "assignee": "담당자", "due": "기한",
+    "priority": "high|medium|low"
+  }],
+  "nextSteps": [{
+    "title": "다음 스텝 제목",
+    "reason": "이유 1-2문장"
+  }]
+}`</span>
+
+<span class="kw">const</span> model = genAI.<span class="fn">getGenerativeModel</span>({
+  model: <span class="st">'gemini-2.5-flash'</span>,
+  generationConfig: {
+    responseMimeType: <span class="st">'application/json'</span>, <span class="cm">// JSON 모드 강제</span>
+    maxOutputTokens: <span class="nm">8192</span>,
+  }
+})</pre>
+    <div class="callout green" style="margin-bottom:0">
+      <div class="callout-icon">✨</div>
+      <div><strong>AI 응답 구조:</strong> <code>detail</code>(전체 요약) · <code>core</code>(결정사항) · <code>keywords</code>(8개) · <code>actions</code>(담당자+기한+우선순위) · <code>nextSteps</code>(AI 제안 3개). ReviewScreen에서 각 항목을 직접 편집할 수 있습니다.</div>
+    </div>
+  </div>
+
+  <!-- State -->
+  <div class="card" style="border-left:3px solid var(--green);margin-bottom:20px">
+    <div style="display:flex;align-items:center;gap:10px;margin-bottom:12px">
+      <span class="badge green">STATE</span>
+      <h3 style="margin:0">상태 관리 — Zustand (meetingStore)</h3>
+    </div>
+    <p style="margin-bottom:12px">전체 앱 상태를 하나의 Zustand 스토어에서 관리합니다. 화면 전환(<code>step</code>), 녹음 데이터(<code>utterances</code>), AI 결과(<code>minutes</code>), 히스토리까지 모두 포함합니다.</p>
+    <pre><span class="cm">// store/meetingStore.ts — 주요 상태</span>
+<span class="kw">interface</span> <span class="tp">MeetingStore</span> {
+  <span class="cm">// 화면 전환</span>
+  step: <span class="st">'setup'</span> | <span class="st">'recording'</span> | <span class="st">'review'</span> | <span class="st">'slack'</span> | <span class="st">'history'</span>
+
+  <span class="cm">// 회의 메타</span>
+  title: <span class="tp">string</span>; meetingType: <span class="st">'face'</span> | <span class="st">'online'</span>
+  participants: <span class="tp">Participant</span>[]
+
+  <span class="cm">// 녹음·전사</span>
+  utterances: <span class="tp">Utterance</span>[]    <span class="cm">// 발언 목록</span>
+  speakerMap: <span class="tp">Record</span>&lt;<span class="tp">string</span>, <span class="tp">string</span>&gt; <span class="cm">// Speaker 0 → "Terry"</span>
+  isRecording: <span class="tp">boolean</span>; isPaused: <span class="tp">boolean</span>
+  elapsedSeconds: <span class="tp">number</span>
+
+  <span class="cm">// AI 결과</span>
+  minutes: <span class="tp">MeetingMinutes</span> | <span class="tp">null</span>
+  isAnalyzing: <span class="tp">boolean</span>
+
+  <span class="cm">// 히스토리</span>
+  meetingHistory: <span class="tp">MeetingRecord</span>[]
+}</pre>
+  </div>
+
+  <!-- Slack -->
+  <div class="card" style="border-left:3px solid var(--orange);margin-bottom:20px">
+    <div style="display:flex;align-items:center;gap:10px;margin-bottom:12px">
+      <span class="badge orange">SLACK</span>
+      <h3 style="margin:0">Slack 전송 — Incoming Webhook</h3>
+    </div>
+    <p style="margin-bottom:12px">Slack Block Kit을 이용해 회의록을 구조화된 메시지로 전송합니다. Webhook URL은 <code>data/slack-settings.json</code>에 저장됩니다.</p>
+    <div class="code-label">app/api/slack/route.ts — Block Kit 메시지 구성</div>
+    <pre><span class="cm">// 회의록 → Slack Block Kit 변환</span>
+<span class="kw">const</span> blocks = [
+  { type: <span class="st">'header'</span>, text: { type: <span class="st">'plain_text'</span>, text: <span class="st">`📋 [회의록] ${title}`</span> }},
+  { type: <span class="st">'context'</span>, elements: [{ type: <span class="st">'mrkdwn'</span>,
+    text: <span class="st">`📅 ${date} · ⏱ ${duration} · 👥 ${participants}`</span> }]},
+  { type: <span class="st">'divider'</span> },
+  { type: <span class="st">'section'</span>, text: { type: <span class="st">'mrkdwn'</span>,
+    text: <span class="st">`*결정사항*\n${coreLines}`</span> }},
+  { type: <span class="st">'section'</span>, text: { type: <span class="st">'mrkdwn'</span>,
+    text: <span class="st">`*액션 아이템*\n${actionLines}`</span> }},
+  <span class="cm">// nextSteps (format==='full'일 때만)</span>
+]
+<span class="cm">// Webhook으로 전송</span>
+<span class="kw">await</span> <span class="fn">fetch</span>(webhookUrl, {
+  method: <span class="st">'POST'</span>,
+  headers: { <span class="st">'Content-Type'</span>: <span class="st">'application/json'</span> },
+  body: <span class="tp">JSON</span>.<span class="fn">stringify</span>({ text, blocks })
+})</pre>
+  </div>
+
+  <!-- 파일 구조 -->
+  <div class="card">
+    <h3 style="margin-bottom:12px">📁 프로젝트 파일 구조</h3>
+    <pre><span class="cm">meetnotes/
+├── app/
+│   ├── page.tsx                  ← 메인 진입점 (step 분기)
+│   └── api/
+│       ├── analyze/route.ts      ← ★ Gemini AI 회의록 생성
+│       ├── transcribe/
+│       │   ├── file/route.ts     ← Deepgram 파일 전사
+│       │   └── token/route.ts    ← Deepgram 임시 토큰 발급
+│       ├── slack/
+│       │   ├── route.ts          ← Slack Webhook 전송
+│       │   ├── settings/route.ts ← Webhook URL 저장
+│       │   └── status/route.ts   ← 연결 상태 확인
+│       ├── calendar/
+│       │   ├── refresh/route.ts  ← Apps Script 호출·캐시
+│       │   └── events/route.ts   ← 캐시 조회
+│       └── meetings/route.ts     ← Supabase CRUD
+├── components/
+│   ├── SetupScreen.tsx           ← 회의 설정
+│   ├── RecordingScreen.tsx       ← 녹음·전사
+│   ├── ReviewScreen.tsx          ← ★ 회의록 편집·내보내기
+│   ├── SlackScreen.tsx           ← Slack 전송
+│   └── HistoryScreen.tsx         ← 히스토리
+├── store/meetingStore.ts         ← ★ 전체 상태 관리 (Zustand)
+├── lib/
+│   ├── useDeepgram.ts            ← ★ WebSocket 실시간 전사
+│   ├── exportTxt.ts              ← TXT 내보내기
+│   └── parseICS.ts               ← iCal 파서
+└── data/                         ← 로컬 설정 파일
+    ├── slack-settings.json       ← Webhook URL
+    └── calendar-settings.json    ← Apps Script URL</span></pre>
+  </div>
+</section>
+
+
+<!-- ═══════════════════════════════════════════════════ -->
+<!-- 5. QA -->
+<!-- ═══════════════════════════════════════════════════ -->
+<section class="section" id="qa">
+  <div class="section-header">
+    <div class="section-badge red">05 · QA</div>
+    <h2>테스트 시나리오 & 트러블슈팅</h2>
+  </div>
+
+  <h3 style="font-size:12px;color:var(--text-secondary);font-weight:700;text-transform:uppercase;letter-spacing:1.5px;margin-bottom:14px">핵심 기능 테스트 체크리스트</h3>
+  <div class="grid-2" style="margin-bottom:24px">
+    <div class="card">
+      <h3 style="margin-bottom:10px">🎙 녹음·전사</h3>
+      <ul class="checklist">
+        <li>마이크 권한 허용 후 녹음 시작됨</li>
+        <li>실시간 자막이 화면에 표시됨</li>
+        <li>일시정지 / 재개 정상 동작</li>
+        <li>발언자 이름 수정 시 전체 자막 반영</li>
+        <li>온라인: MP3 업로드 후 전사 완료</li>
+        <li class="warn">마이크 없는 환경에서는 온라인 모드 사용</li>
+      </ul>
+    </div>
+    <div class="card">
+      <h3 style="margin-bottom:10px">✨ AI 분석</h3>
+      <ul class="checklist">
+        <li>종료 후 "AI 분석 중..." 스피너 표시</li>
+        <li>detail / core / keywords / actions / nextSteps 모두 생성됨</li>
+        <li>actions에 담당자·기한·우선순위 포함됨</li>
+        <li>nextSteps 3개 제안됨</li>
+        <li>각 항목 직접 편집 후 저장 시 반영됨</li>
+        <li class="warn">트랜스크립트가 짧으면 AI 결과가 간략할 수 있음</li>
+      </ul>
+    </div>
+    <div class="card">
+      <h3 style="margin-bottom:10px">💬 Slack 전송</h3>
+      <ul class="checklist">
+        <li>Webhook URL 설정 후 연결됨 표시</li>
+        <li>포맷(전체/간단/액션만) 별 미리보기 변경</li>
+        <li>전송 버튼 클릭 후 Slack 채널에 메시지 수신</li>
+        <li>히스토리에 Slack 전송 완료 표시</li>
+        <li class="warn">Webhook URL이 만료되면 재등록 필요</li>
+      </ul>
+    </div>
+    <div class="card">
+      <h3 style="margin-bottom:10px">📁 내보내기·히스토리</h3>
+      <ul class="checklist">
+        <li>TXT 내보내기 — 파일 다운로드 정상</li>
+        <li>Slack 텍스트 복사 — 클립보드 복사 성공</li>
+        <li>히스토리 목록에 회의 기록 표시</li>
+        <li>히스토리 항목 클릭 시 전체 내용 펼쳐짐</li>
+        <li>아카이브 처리 후 목록에서 제거됨</li>
+      </ul>
+    </div>
+  </div>
+
+  <h3 style="font-size:12px;color:var(--text-secondary);font-weight:700;text-transform:uppercase;letter-spacing:1.5px;margin-bottom:14px">🐛 주요 트러블슈팅 사례</h3>
+  <div style="overflow-x:auto">
+  <table class="itable">
+    <tr><th>#</th><th>증상</th><th>원인</th><th>해결</th></tr>
+    <tr>
+      <td style="color:var(--text-muted);white-space:nowrap">#1</td>
+      <td>자막이 전혀 안 나옴</td>
+      <td style="color:var(--text-secondary)">브라우저 마이크 권한 미허용</td>
+      <td style="color:var(--green)">주소창 자물쇠 → 마이크 허용. HTTPS 환경 권장</td>
+    </tr>
+    <tr>
+      <td style="color:var(--text-muted);white-space:nowrap">#2</td>
+      <td>AI 분석 결과가 빈값</td>
+      <td style="color:var(--text-secondary)">트랜스크립트가 "(트랜스크립트 없음)"으로 전달됨</td>
+      <td style="color:var(--green)">녹음 중 자막이 표시됐는지 확인. 확정 발화(is_final)가 0이면 녹음 환경 점검</td>
+    </tr>
+    <tr>
+      <td style="color:var(--text-muted);white-space:nowrap">#3</td>
+      <td>AI JSON 파싱 실패 오류</td>
+      <td style="color:var(--text-secondary)">Gemini가 JSON 외 텍스트를 포함해 응답</td>
+      <td style="color:var(--green)"><code>responseMimeType: 'application/json'</code> 설정으로 JSON 모드 강제. 정규식으로 JSON 추출 추가</td>
+    </tr>
+    <tr>
+      <td style="color:var(--text-muted);white-space:nowrap">#4</td>
+      <td>Slack 전송 실패</td>
+      <td style="color:var(--text-secondary)">Webhook URL 만료 또는 잘못된 URL</td>
+      <td style="color:var(--green)">api.slack.com에서 새 Webhook URL 생성 후 ⚙️에서 재등록</td>
+    </tr>
+    <tr>
+      <td style="color:var(--text-muted);white-space:nowrap">#5</td>
+      <td>파일 전사가 너무 느림</td>
+      <td style="color:var(--text-secondary)">대용량 파일(수백 MB) 업로드 시 시간 초과</td>
+      <td style="color:var(--green)">오디오만 추출해 MP3로 변환 후 업로드. 일반적으로 1시간 회의 = 수십 MB</td>
+    </tr>
+    <tr>
+      <td style="color:var(--text-muted);white-space:nowrap">#6</td>
+      <td>발언자가 전부 Speaker 0</td>
+      <td style="color:var(--text-secondary)">발화 간 묵음 구간이 짧아 화자 분리 미작동</td>
+      <td style="color:var(--green)">Deepgram diarize 파라미터는 정상. 발언 전환 시 짧은 침묵이 필요. 다화자 녹음 환경 개선 권장</td>
+    </tr>
+  </table>
+  </div>
+
+  <div style="margin-top:28px">
+    <h3 style="font-size:12px;color:var(--text-secondary);font-weight:700;text-transform:uppercase;letter-spacing:1.5px;margin-bottom:14px">🔑 환경변수 설정 (.env.local)</h3>
+    <div class="code-label">필수 API 키 3가지</div>
+    <pre><span class="cm"># 1. Deepgram — 음성 전사 (실시간 + 파일)</span>
+<span class="pp">DEEPGRAM_API_KEY</span>=<span class="st">e048e1a853d44bf0364e78a...</span>
+
+<span class="cm"># 2. Google AI — Gemini 2.5 Flash (회의록 생성)</span>
+<span class="pp">GOOGLE_AI_API_KEY</span>=<span class="st">AIzaSyAYMFpiP1bBdHLz...</span>
+
+<span class="cm"># 3. Slack (선택) — OAuth 연동용, Webhook은 UI에서 설정</span>
+<span class="pp">SLACK_CLIENT_ID</span>=<span class="st">194626280262.112...</span>
+<span class="pp">SLACK_CLIENT_SECRET</span>=<span class="st">2934d8da96891bb7...</span>
+
+<span class="cm"># 앱 URL (Slack OAuth 콜백용)</span>
+<span class="pp">NEXT_PUBLIC_APP_URL</span>=<span class="st">http://localhost:3000</span></pre>
+
+    <div class="callout green" style="margin-bottom:0">
+      <div class="callout-icon">🚀</div>
+      <div><strong>처음 설치하는 분:</strong> 위의 <a href="#setup" style="color:var(--green)">🚀 시작하기 섹션</a>에 API 키 발급부터 앱 실행까지 단계별 안내가 있습니다. <code>npm install</code> → <code>npm run dev</code> → <a href="http://localhost:3000" style="color:var(--green)">localhost:3000</a> 접속. <code>data/</code> 디렉토리는 자동 생성됩니다.</div>
+    </div>
+  </div>
+</section>
+
+<hr>
+<div style="text-align:center;padding:28px 0;color:var(--text-muted);font-size:12px">
+  MeetNotes AI 회의록 서비스 개발 매뉴얼 · 2026년 5월
+</div>
+
+</div><!-- /.page -->
+<script>
+  window.addEventListener('scroll',()=>{
+    const el=document.documentElement
+    document.getElementById('progress-bar').style.width=(el.scrollTop/(el.scrollHeight-el.clientHeight)*100)+'%'
+  })
+  const sections=document.querySelectorAll('.section')
+  const links=document.querySelectorAll('nav a')
+  new IntersectionObserver(entries=>{
+    entries.forEach(e=>{
+      if(e.isIntersecting)links.forEach(a=>{a.classList.toggle('active',a.getAttribute('href')==='#'+e.target.id)})
+    })
+  },{threshold:.25}).observe && sections.forEach(s=>new IntersectionObserver(entries=>{
+    entries.forEach(e=>{if(e.isIntersecting)links.forEach(a=>{a.classList.toggle('active',a.getAttribute('href')==='#'+e.target.id)})})
+  },{threshold:.25}).observe(s))
+</script>
+</body>
+</html>

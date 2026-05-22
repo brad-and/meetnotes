@@ -1,0 +1,165 @@
+@tailwind base;
+@tailwind components;
+@tailwind utilities;
+
+:root {
+  --bg-base: #121212;
+  --bg-surface: #181818;
+  --bg-elevated: #1f1f1f;
+  --bg-card: #252525;
+  --green: #1ed760;
+  --green-dim: #1a3a1a;
+  --text-primary: #ffffff;
+  --text-secondary: #b3b3b3;
+  --text-muted: #4d4d4d;
+  --border: #2a2a2a;
+  --border-mid: #4d4d4d;
+  --red: #f3727f;
+  --orange: #ffa42b;
+  --blue: #539df5;
+  --shadow-card: rgba(0,0,0,0.3) 0px 8px 8px;
+  --shadow-dialog: rgba(0,0,0,0.5) 0px 8px 24px;
+}
+
+* { box-sizing: border-box; }
+
+body {
+  background: var(--bg-base);
+  color: var(--text-primary);
+  font-family: helvetica, arial, sans-serif;
+  margin: 0;
+}
+
+/* Pill button base */
+.btn-pill {
+  padding: 8px 18px;
+  background: var(--bg-elevated);
+  border: 1px solid #5a5a5a;
+  border-radius: 9999px;
+  font-size: 12px;
+  font-weight: 700;
+  color: #e0e0e0;
+  cursor: pointer;
+  text-transform: uppercase;
+  letter-spacing: 1.4px;
+  display: inline-flex;
+  align-items: center;
+  gap: 6px;
+  transition: border-color .15s, background .15s, color .15s;
+  white-space: nowrap;
+}
+.btn-pill:hover {
+  border-color: #9a9a9a;
+  background: var(--bg-card);
+  color: #fff;
+}
+.btn-pill:active { transform: scale(0.97); }
+
+/* Green CTA button */
+.btn-green {
+  padding: 10px 24px;
+  background: var(--green);
+  border: none;
+  border-radius: 9999px;
+  font-size: 14px;
+  font-weight: 700;
+  color: #000;
+  cursor: pointer;
+  text-transform: uppercase;
+  letter-spacing: 1.4px;
+  display: inline-flex;
+  align-items: center;
+  gap: 8px;
+  transition: background .15s, transform .1s, box-shadow .15s;
+  box-shadow: 0 0 0 0 rgba(30,215,96,0);
+}
+.btn-green:hover {
+  background: #1fdf64;
+  transform: scale(1.02);
+  box-shadow: 0 4px 16px rgba(30,215,96,0.25);
+}
+.btn-green:disabled { opacity: .4; cursor: not-allowed; transform: none; box-shadow: none; }
+
+/* Danger/Red variant */
+.btn-danger {
+  padding: 8px 18px;
+  background: rgba(243,114,127,0.1);
+  border: 1px solid var(--red);
+  border-radius: 9999px;
+  font-size: 12px;
+  font-weight: 700;
+  color: var(--red);
+  cursor: pointer;
+  text-transform: uppercase;
+  letter-spacing: 1.4px;
+  display: inline-flex;
+  align-items: center;
+  gap: 6px;
+  transition: background .15s;
+}
+.btn-danger:hover { background: rgba(243,114,127,0.2); }
+
+/* Card */
+.sp-card {
+  background: var(--bg-surface);
+  border-radius: 8px;
+  padding: 20px;
+  box-shadow: var(--shadow-card);
+}
+
+/* Section label */
+.sp-label {
+  font-size: 10px;
+  font-weight: 700;
+  color: var(--text-secondary);
+  text-transform: uppercase;
+  letter-spacing: 2px;
+  margin-bottom: 10px;
+  display: block;
+}
+
+/* Input */
+.sp-input {
+  width: 100%;
+  height: 40px;
+  background: var(--bg-elevated);
+  border: none;
+  box-shadow: rgb(18,18,18) 0px 1px 0px, rgb(124,124,124) 0px 0px 0px 1px inset;
+  border-radius: 4px;
+  padding: 0 14px;
+  font-size: 14px;
+  color: #fff;
+  outline: none;
+  font-family: inherit;
+  transition: box-shadow .15s;
+}
+.sp-input:focus {
+  box-shadow: rgb(18,18,18) 0px 1px 0px, #fff 0px 0px 0px 1px inset;
+}
+
+/* Toggle */
+.sp-toggle {
+  position: relative;
+  width: 36px;
+  height: 20px;
+  background: var(--border-mid);
+  border-radius: 9999px;
+  cursor: pointer;
+  transition: background .2s;
+  flex-shrink: 0;
+}
+.sp-toggle.on { background: var(--green); }
+.sp-toggle-thumb {
+  position: absolute;
+  top: 2px; left: 2px;
+  width: 16px; height: 16px;
+  background: #fff;
+  border-radius: 50%;
+  transition: transform .2s;
+}
+.sp-toggle.on .sp-toggle-thumb { transform: translateX(16px); }
+
+/* Scrollbar */
+::-webkit-scrollbar { width: 6px; }
+::-webkit-scrollbar-track { background: var(--bg-base); }
+::-webkit-scrollbar-thumb { background: var(--border-mid); border-radius: 3px; }
