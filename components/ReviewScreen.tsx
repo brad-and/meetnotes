@@ -1,5 +1,5 @@
 'use client'
-import { useState, useEffect } from 'react'
+import { useState, useEffect, useRef, useCallback } from 'react'
 import { useMeetingStore, ActionItem } from '@/store/meetingStore'
 import Topbar from '@/components/ui/Topbar'
 import { buildTxtContent, downloadTxt } from '@/lib/exportTxt'
@@ -85,6 +85,17 @@ export default function ReviewScreen() {
   const [showExportMenu, setShowExportMenu] = useState(false)
   const [copyStatus, setCopyStatus] = useState<CopyStatus>('idle')
   const [saveStatus, setSaveStatus] = useState<'idle' | 'saving' | 'done'>('idle')
+  const detailRef = useRef<HTMLTextAreaElement>(null)
+
+  // detail textarea 높이 자동 조절
+  const autoResizeDetail = useCallback(() => {
+    const el = detailRef.current
+    if (!el) return
+    el.style.height = 'auto'
+    el.style.height = `${el.scrollHeight}px`
+  }, [])
+
+  useEffect(() => { autoResizeDetail() }, [localMinutes?.detail, autoResizeDetail])
 
   const handleCopySlack = async () => {
     if (!localMinutes) return
@@ -306,12 +317,17 @@ export default function ReviewScreen() {
           />
 
           {/* Section: Detail */}
-          <Section badge="자세한 내용" badgeStyle={BADGE_STYLES.detail} title="전체 내용 요약">
+          <Section badge="자세한 내용" badgeStyle={BADGE_STYLES.detail} title="전체 회의 내용">
             <textarea
-              style={{ width: '100%', background: 'transparent', border: 'none', fontSize: 13, color: '#cbcbcb', lineHeight: 1.7, resize: 'none', outline: 'none', fontFamily: 'inherit' }}
-              rows={4}
+              ref={detailRef}
+              style={{
+                width: '100%', background: 'transparent', border: 'none',
+                fontSize: 13, color: '#cbcbcb', lineHeight: 1.9,
+                resize: 'none', outline: 'none', fontFamily: 'inherit',
+                minHeight: 180, overflow: 'hidden',
+              }}
               value={localMinutes.detail}
-              onChange={(e) => updateMinutes({ detail: e.target.value })}
+              onChange={(e) => { updateMinutes({ detail: e.target.value }); autoResizeDetail() }}
             />
           </Section>
 
