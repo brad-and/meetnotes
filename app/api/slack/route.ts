@@ -11,6 +11,12 @@ function readSlackSettings(): Record<string, string> {
   }
 }
 
+function toStr(v: unknown): string {
+  if (typeof v === 'string') return v
+  if (Array.isArray(v)) return (v as string[]).join('\n')
+  return String(v ?? '')
+}
+
 // eslint-disable-next-line @typescript-eslint/no-explicit-any
 function buildBlocks(title: string, m: MeetingMinutes, meta: { date: string; duration: string; participants: string }, format: string, options: { mention: boolean }): any[] {
   // eslint-disable-next-line @typescript-eslint/no-explicit-any
@@ -25,7 +31,7 @@ function buildBlocks(title: string, m: MeetingMinutes, meta: { date: string; dur
       type: 'section',
       text: {
         type: 'mrkdwn',
-        text: `*결정사항*\n${m.core.split('\n').map((l: string) => `• ${l.replace(/^\d+\.\s*/, '')}`).join('\n')}`,
+        text: `*결정사항*\n${toStr(m.core).split('\n').map((l: string) => `• ${l.replace(/^\d+\.\s*/, '')}`).join('\n')}`,
       },
     })
   }

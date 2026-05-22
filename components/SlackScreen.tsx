@@ -3,6 +3,12 @@ import { useState, useEffect } from 'react'
 import { useMeetingStore } from '@/store/meetingStore'
 import Topbar from '@/components/ui/Topbar'
 
+const toStr = (v: unknown): string => {
+  if (typeof v === 'string') return v
+  if (Array.isArray(v)) return (v as string[]).join('\n')
+  return String(v ?? '')
+}
+
 const FORMAT_DESC = {
   full: '자세한 내용, 핵심 결정, 키워드, 액션, 다음 스텝을 모두 포함해요.',
   brief: '핵심 결정사항과 액션 아이템만 간결하게 전달해요.',
@@ -236,7 +242,7 @@ export default function SlackScreen() {
                     {(slackFormat === 'full' || slackFormat === 'brief') && minutes && (
                       <div style={{ marginTop: 8 }}>
                         <strong style={{ color: '#fff' }}>결정사항</strong><br />
-                        {minutes.core.split('\n').slice(0, 3).map((line, i) => (
+                        {toStr(minutes.core).split('\n').slice(0, 3).map((line, i) => (
                           <div key={i}>• {line.replace(/^\d+\.\s*/, '')}</div>
                         ))}
                       </div>

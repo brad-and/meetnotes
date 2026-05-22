@@ -7,6 +7,13 @@ import { mimeTypeToExt } from '@/lib/useDeepgram'
 
 type CopyStatus = 'idle' | 'copied'
 
+// 배열 또는 문자열을 항상 string으로 변환
+function toStr(v: unknown): string {
+  if (typeof v === 'string') return v
+  if (Array.isArray(v)) return v.join('\n')
+  return String(v ?? '')
+}
+
 // Slack 붙여넣기용 텍스트 포맷 생성
 function buildSlackText(title: string, date: string, duration: string, participantNames: string, m: import('@/store/meetingStore').MeetingMinutes): string {
   const lines: string[] = []
@@ -17,16 +24,18 @@ function buildSlackText(title: string, date: string, duration: string, participa
   lines.push('')
 
   // 전체 내용 요약 (detail)
-  if (m.detail?.trim()) {
+  const detail = toStr(m.detail)
+  if (detail.trim()) {
     lines.push('*회의 내용 요약*')
-    m.detail.split('\n').filter(Boolean).forEach((l) => lines.push(l))
+    detail.split('\n').filter(Boolean).forEach((l) => lines.push(l))
     lines.push('')
   }
 
   // 결정사항 (core)
-  if (m.core?.trim()) {
+  const core = toStr(m.core)
+  if (core.trim()) {
     lines.push('*결정사항*')
-    m.core.split('\n').filter(Boolean).forEach((l) => lines.push(`• ${l.replace(/^\d+\.\s*/, '')}`))
+    core.split('\n').filter(Boolean).forEach((l) => lines.push(`• ${l.replace(/^\d+\.\s*/, '')}`))
     lines.push('')
   }
 
@@ -136,7 +145,16 @@ export default function ReviewScreen() {
     downloadTxt(`회의록_${safeName || '미제목'}.txt`, content)
   }
 
-  useEffect(() => { setLocalMinutes(minutes) }, [minutes])
+  useEffect(() => {
+    if (!minutes) { setLocalMinutes(null); return }
+    // store에 저장된 값도 배열일 수 있으므로 정규화
+    const toStr = (v: unknown): string => {
+      if (typeof v === 'string') return v
+      if (Array.isArray(v)) return (v as string[]).join('\n')
+      return String(v ?? '')
+    }
+    setLocalMinutes({ ...minutes, detail: toStr(minutes.detail), core: toStr(minutes.core) })
+  }, [minutes])
 
   const updateMinutes = (updates: Partial<typeof minutes>) => {
     if (!localMinutes) return

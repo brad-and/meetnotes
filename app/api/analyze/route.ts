@@ -56,7 +56,18 @@ ${transcript}
 
     const match = text.match(/\{[\s\S]*\}/)
     if (match) {
-      const minutes = JSON.parse(match[0])
+      const raw = JSON.parse(match[0])
+      // Gemini가 string 필드를 배열로 반환하는 경우 방어적 정규화
+      const toStr = (v: unknown): string => {
+        if (typeof v === 'string') return v
+        if (Array.isArray(v)) return v.join('\n')
+        return String(v ?? '')
+      }
+      const minutes = {
+        ...raw,
+        detail: toStr(raw.detail),
+        core:   toStr(raw.core),
+      }
       return NextResponse.json({ minutes })
     }
     return NextResponse.json({ error: 'JSON 파싱 실패', raw: text }, { status: 500 })
