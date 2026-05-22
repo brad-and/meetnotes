@@ -21,7 +21,7 @@ function priorityLabel(p: string) {
   return '낮음'
 }
 
-function DetailModal({ record, onClose }: { record: MeetingRecord; onClose: () => void }) {
+function DetailModal({ record, onClose, onDelete }: { record: MeetingRecord; onClose: () => void; onDelete: (id: string) => void }) {
   const m: MeetingMinutes = record.minutes
   return (
     <div
@@ -57,6 +57,11 @@ function DetailModal({ record, onClose }: { record: MeetingRecord; onClose: () =
               className="btn-pill"
               style={{ fontSize: 11, padding: '5px 12px' }}
             >↓ TXT</button>
+            <button
+              className="btn-danger"
+              style={{ fontSize: 11, padding: '5px 12px', display: 'flex', alignItems: 'center', gap: 4 }}
+              onClick={() => { onDelete(record.id); onClose() }}
+            >🗑 삭제</button>
             <button
               onClick={onClose}
               style={{ background: 'none', border: 'none', color: '#b3b3b3', fontSize: 20, cursor: 'pointer', padding: '0 4px' }}
@@ -152,7 +157,17 @@ export default function HistoryScreen() {
   const { meetingHistory, isHistoryLoading, loadHistory, removeFromHistory, clearHistory, toggleArchive, setStep } = useMeetingStore()
   const [selected, setSelected] = useState<MeetingRecord | null>(null)
   const [confirmClear, setConfirmClear] = useState(false)
+  const [confirmDeleteId, setConfirmDeleteId] = useState<string | null>(null)
   const [tab, setTab] = useState<'all' | 'archived'>('all')
+
+  const handleDelete = (id: string) => setConfirmDeleteId(id)
+  const confirmDelete = () => {
+    if (confirmDeleteId) {
+      removeFromHistory(confirmDeleteId)
+      if (selected?.id === confirmDeleteId) setSelected(null)
+      setConfirmDeleteId(null)
+    }
+  }
 
   // 화면 진입 시 DB에서 최신 데이터 로드
   useEffect(() => {
@@ -269,12 +284,18 @@ export default function HistoryScreen() {
                     onMouseEnter={(e) => (e.currentTarget.style.color = '#1ed760')}
                     onMouseLeave={(e) => (e.currentTarget.style.color = record.archived ? '#1ed760' : '#4d4d4d')}
                   >{record.archived ? '🗂' : '📥'}</span>
-                  <span
-                    onClick={(e) => { e.stopPropagation(); removeFromHistory(record.id) }}
-                    style={{ fontSize: 12, color: '#4d4d4d', cursor: 'pointer', padding: 4 }}
-                    onMouseEnter={(e) => (e.currentTarget.style.color = '#f3727f')}
-                    onMouseLeave={(e) => (e.currentTarget.style.color = '#4d4d4d')}
-                  >✕</span>
+                  <button
+                    onClick={(e) => { e.stopPropagation(); handleDelete(record.id) }}
+                    title="삭제"
+                    style={{
+                      background: 'none', border: '1px solid #3a1a1a', borderRadius: 6,
+                      color: '#f3727f', cursor: 'pointer', padding: '4px 8px',
+                      fontSize: 11, fontWeight: 700, display: 'flex', alignItems: 'center', gap: 3,
+                      transition: 'background .15s, border-color .15s',
+                    }}
+                    onMouseEnter={(e) => { e.currentTarget.style.background = '#3a1a1a'; e.currentTarget.style.borderColor = '#f3727f' }}
+                    onMouseLeave={(e) => { e.currentTarget.style.background = 'none'; e.currentTarget.style.borderColor = '#3a1a1a' }}
+                  >🗑 삭제</button>
                 </div>
               </div>
             ))}
@@ -283,7 +304,7 @@ export default function HistoryScreen() {
       </div>
 
       {/* Detail modal */}
-      {selected && <DetailModal record={selected} onClose={() => setSelected(null)} />}
+      {selected && <DetailModal record={selected} onClose={() => setSelected(null)} onDelete={handleDelete} />}
 
       {/* Confirm clear dialog */}
       {confirmClear && (
@@ -308,6 +329,37 @@ export default function HistoryScreen() {
           </div>
         </div>
       )}
+
+      {/* Confirm single delete dialog */}
+      {confirmDeleteId && (() => {
+        const target = meetingHistory.find((r) => r.id === confirmDeleteId)
+        return (
+          <div
+            onClick={() => setConfirmDeleteId(null)}
+            style={{ position: 'fixed', inset: 0, background: 'rgba(0,0,0,0.7)', display: 'flex', alignItems: 'center', justifyContent: 'center', zIndex: 1100 }}
+          >
+            <div
+              onClick={(e) => e.stopPropagation()}
+              style={{ background: '#1f1f1f', borderRadius: 12, padding: 28, maxWidth: 360, width: '100%', boxShadow: 'rgba(0,0,0,0.5) 0px 8px 24px', textAlign: 'center' }}
+            >
+              <div style={{ fontSize: 32, marginBottom: 12 }}>🗑</div>
+              <div style={{ fontSize: 16, fontWeight: 700, color: '#fff', marginBottom: 8 }}>회의록 삭제</div>
+              <div style={{
+                fontSize: 14, fontWeight: 700, color: '#f3727f',
+                background: '#3a1a1a', border: '1px solid #f3727f',
+                borderRadius: 6, padding: '8px 14px', marginBottom: 10,
+              }}>{target?.title ?? '회의록'}</div>
+              <div style={{ fontSize: 13, color: '#b3b3b3', marginBottom: 20 }}>
+                이 회의록을 삭제하면 DB에서도 영구적으로 제거됩니다.<br />복구할 수 없어요.
+              </div>
+              <div style={{ display: 'flex', gap: 8, justifyContent: 'center' }}>
+                <button className="btn-pill" onClick={() => setConfirmDeleteId(null)}>취소</button>
+                <button className="btn-danger" onClick={confirmDelete}>삭제</button>
+              </div>
+            </div>
+          </div>
+        )
+      })()}
     </div>
   )
 }
