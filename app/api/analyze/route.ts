@@ -78,7 +78,28 @@ ${transcript}
 
     const match = text.match(/\{[\s\S]*\}/)
     if (match) {
-      const raw = JSON.parse(match[0])
+      // Gemini가 JSON string 내부에 raw 제어문자(\n \r \t)를 그대로 넣는 경우 파싱 실패
+      // → 상태 머신으로 string 영역 내 제어문자만 이스케이프
+      const sanitizeJson = (s: string): string => {
+        let out = ''
+        let inStr = false
+        let esc = false
+        for (const ch of s) {
+          if (esc) { out += ch; esc = false; continue }
+          if (ch === '\\' && inStr) { out += ch; esc = true; continue }
+          if (ch === '"') { out += ch; inStr = !inStr; continue }
+          if (inStr) {
+            if (ch === '\n') { out += '\\n'; continue }
+            if (ch === '\r') { out += '\\r'; continue }
+            if (ch === '\t') { out += '\\t'; continue }
+          }
+          out += ch
+        }
+        return out
+      }
+
+      const raw = JSON.parse(sanitizeJson(match[0]))
+
       // Gemini가 string 필드를 배열로 반환하는 경우 방어적 정규화
       const toStr = (v: unknown): string => {
         if (typeof v === 'string') return v
