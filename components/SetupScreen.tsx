@@ -32,6 +32,7 @@ export default function SetupScreen() {
   const [showCalSettings, setShowCalSettings] = useState(false)
   const [gscriptUrl, setGscriptUrl] = useState('')
   const [gscriptSaved, setGscriptSaved] = useState(false)
+  const [hostEmail, setHostEmail] = useState('')
 
   useEffect(() => { setMounted(true) }, [])
 
@@ -45,6 +46,7 @@ export default function SetupScreen() {
           setGscriptUrl(url)
           localStorage.setItem('calGScriptUrl', url)
         }
+        if (d.hostEmail) setHostEmail(d.hostEmail)
       })
       .catch(() => {
         const saved = localStorage.getItem('calGScriptUrl')
@@ -107,7 +109,7 @@ export default function SetupScreen() {
     fetch('/api/calendar/settings', {
       method: 'POST',
       headers: { 'Content-Type': 'application/json' },
-      body: JSON.stringify({ gscriptUrl: url }),
+      body: JSON.stringify({ gscriptUrl: url, hostEmail: hostEmail.trim() }),
     }).catch(() => {})
     setGscriptSaved(true)
     setTimeout(() => setGscriptSaved(false), 2000)
@@ -127,12 +129,17 @@ export default function SetupScreen() {
     participants
       .filter((p) => p.id.startsWith('cal-'))
       .forEach((p) => removeParticipant(p.id))
-    // 참석자 중 이메일 이름 부분만 추출해서 참여자로 추가
-    const names = ev.attendees
-      .filter((e) => !e.includes('resource.calendar'))
-      .map((e) => e.split('@')[0].replace(/\./g, ' ').replace(/\b\w/g, (c) => c.toUpperCase()))
-      .slice(0, 8)
-    names.forEach((name, i) => {
+
+    // 참석자 목록 — hostEmail이 있으면 본인을 맨 앞으로 정렬 (→ "나 (진행자)" 레이블)
+    const filtered = ev.attendees.filter((e) => !e.includes('resource.calendar'))
+    const myEmail  = hostEmail.trim().toLowerCase()
+    const sorted   = myEmail
+      ? [...filtered.filter((e) => e.toLowerCase() === myEmail),
+         ...filtered.filter((e) => e.toLowerCase() !== myEmail)]
+      : filtered
+
+    sorted.slice(0, 8).forEach((email, i) => {
+      const name = email.split('@')[0].replace(/\./g, ' ').replace(/\b\w/g, (c) => c.toUpperCase())
       const colorIdx = (i + 1) % COLORS.length
       addParticipant({ id: `cal-${ev.id}-${i}`, name, ...COLORS[colorIdx] })
     })
@@ -341,13 +348,26 @@ export default function SetupScreen() {
     .setMimeType(ContentService.MimeType.JSON);
 }`}
                 </div>
-                <div style={{ display: 'flex', gap: 8 }}>
+                <div style={{ display: 'flex', gap: 8, marginBottom: 10 }}>
                   <input
                     className="sp-input"
                     style={{ flex: 1, fontSize: 12 }}
                     placeholder="https://script.google.com/macros/s/.../exec"
                     value={gscriptUrl}
                     onChange={(e) => setGscriptUrl(e.target.value)}
+                    onKeyDown={(e) => { if (e.key === 'Enter') handleSaveGscriptUrl() }}
+                  />
+                </div>
+                <div style={{ fontSize: 11, fontWeight: 700, color: '#b3b3b3', textTransform: 'uppercase', letterSpacing: '1.4px', marginBottom: 6 }}>
+                  내 구글 계정 (나 · 진행자 자동 설정)
+                </div>
+                <div style={{ display: 'flex', gap: 8 }}>
+                  <input
+                    className="sp-input"
+                    style={{ flex: 1, fontSize: 12 }}
+                    placeholder="brad.and@kakaomobility.com"
+                    value={hostEmail}
+                    onChange={(e) => setHostEmail(e.target.value)}
                     onKeyDown={(e) => { if (e.key === 'Enter') handleSaveGscriptUrl() }}
                   />
                   <button
