@@ -220,7 +220,7 @@ export default function SlackScreen() {
           <div style={{ background: '#1a1d21', borderRadius: 8, overflow: 'hidden', flex: 1, boxShadow: 'rgba(0,0,0,0.5) 0px 8px 24px' }}>
             <div style={{ background: '#1a1d21', padding: '10px 14px', borderBottom: '1px solid #222529', display: 'flex', alignItems: 'center', gap: 8 }}>
               <span style={{ fontSize: 14, color: '#8c8f93' }}>#</span>
-              <span style={{ fontSize: 13, fontWeight: 700, color: '#d1d2d3' }}>{slackChannel.slice(1)}</span>
+              <span style={{ fontSize: 13, fontWeight: 700, color: '#d1d2d3' }}>{slackChannel.startsWith('#') ? slackChannel.slice(1) : slackChannel}</span>
               <span style={{ fontSize: 11, color: '#8c8f93', marginLeft: 4 }}></span>
             </div>
             <div style={{ padding: 16 }}>
@@ -239,15 +239,29 @@ export default function SlackScreen() {
                     <div style={{ color: '#8c8f93', fontSize: 12, marginTop: 4 }}>
                       📅 오늘 · ⏱ {Math.floor(elapsedSeconds / 60)}분 · 👥 {participants.map(p => p.name).join(', ')}
                     </div>
-                    {(slackFormat === 'full' || slackFormat === 'brief') && minutes && (
+                    {/* 전체 회의 내용 (full 포맷만) */}
+                    {slackFormat === 'full' && minutes && toStr(minutes.detail).trim() && (
+                      <div style={{ marginTop: 10, padding: '8px 12px', background: '#222529', borderRadius: 4, borderLeft: '3px solid #539df5' }}>
+                        <div style={{ fontSize: 12, fontWeight: 700, color: '#d1d2d3', marginBottom: 5 }}>📝 전체 회의 내용</div>
+                        {toStr(minutes.detail).split('\n').filter(Boolean).slice(0, 5).map((line, i) => (
+                          <div key={i} style={{ fontSize: 12, color: '#8c8f93', lineHeight: 1.6 }}>{line}</div>
+                        ))}
+                        {toStr(minutes.detail).split('\n').filter(Boolean).length > 5 && (
+                          <div style={{ fontSize: 11, color: '#555a61', marginTop: 4 }}>... 더 보기</div>
+                        )}
+                      </div>
+                    )}
+                    {/* 결정사항 */}
+                    {(slackFormat === 'full' || slackFormat === 'brief') && minutes && toStr(minutes.core).trim() && (
                       <div style={{ marginTop: 8 }}>
                         <strong style={{ color: '#fff' }}>결정사항</strong><br />
-                        {toStr(minutes.core).split('\n').slice(0, 3).map((line, i) => (
+                        {toStr(minutes.core).split('\n').filter(Boolean).slice(0, 3).map((line, i) => (
                           <div key={i}>• {line.replace(/^\d+\.\s*/, '')}</div>
                         ))}
                       </div>
                     )}
-                    {minutes && (
+                    {/* 액션 아이템 */}
+                    {minutes && minutes.actions.length > 0 && (
                       <div style={{ marginTop: 8 }}>
                         <strong style={{ color: '#fff' }}>액션 아이템</strong><br />
                         {minutes.actions.slice(0, 3).map((a) => (
@@ -255,10 +269,11 @@ export default function SlackScreen() {
                         ))}
                       </div>
                     )}
-                    {slackFormat === 'full' && minutes?.nextSteps && (
+                    {/* 다음 스텝 */}
+                    {slackFormat === 'full' && (minutes?.nextSteps?.length ?? 0) > 0 && (
                       <div style={{ marginTop: 10, borderLeft: '3px solid #1ed760', padding: '8px 12px', background: '#222529', borderRadius: '0 4px 4px 0' }}>
                         <div style={{ fontSize: 12, fontWeight: 700, color: '#d1d2d3', marginBottom: 5 }}>다음 스텝 (AI)</div>
-                        {minutes.nextSteps.map((s, i) => (
+                        {minutes?.nextSteps?.map((s, i) => (
                           <div key={i} style={{ fontSize: 12, color: '#8c8f93' }}>{i + 1}. {s.title}</div>
                         ))}
                       </div>

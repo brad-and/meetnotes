@@ -17,6 +17,30 @@ function toStr(v: unknown): string {
   return String(v ?? '')
 }
 
+const SLACK_BLOCK_LIMIT = 2900  // Slack 블록 텍스트 최대 3000자
+
+// 긴 텍스트를 Slack 블록 한도에 맞게 분할해서 추가
+// eslint-disable-next-line @typescript-eslint/no-explicit-any
+function pushTextBlocks(blocks: any[], header: string, body: string) {
+  const lines = body.split('\n')
+  let chunk = `*${header}*\n`
+  let first = true
+  for (const line of lines) {
+    const candidate = chunk + line + '\n'
+    if (candidate.length > SLACK_BLOCK_LIMIT) {
+      blocks.push({ type: 'section', text: { type: 'mrkdwn', text: chunk.trimEnd() } })
+      chunk = first ? '' : ''  // 이어지는 블록은 헤더 없이
+      first = false
+      chunk = line + '\n'
+    } else {
+      chunk = candidate
+    }
+  }
+  if (chunk.trim()) {
+    blocks.push({ type: 'section', text: { type: 'mrkdwn', text: chunk.trimEnd() } })
+  }
+}
+
 // eslint-disable-next-line @typescript-eslint/no-explicit-any
 function buildBlocks(title: string, m: MeetingMinutes, meta: { date: string; duration: string; participants: string }, format: string, options: { mention: boolean }): any[] {
   // eslint-disable-next-line @typescript-eslint/no-explicit-any
@@ -26,16 +50,28 @@ function buildBlocks(title: string, m: MeetingMinutes, meta: { date: string; dur
     { type: 'divider' },
   ]
 
-  if (format === 'full' || format === 'brief') {
-    blocks.push({
-      type: 'section',
-      text: {
-        type: 'mrkdwn',
-        text: `*결정사항*\n${toStr(m.core).split('\n').map((l: string) => `• ${l.replace(/^\d+\.\s*/, '')}`).join('\n')}`,
-      },
-    })
+  // ① 전체 회의 내용 (full 포맷만)
+  if (format === 'full') {
+    const detail = toStr(m.detail).trim()
+    if (detail) {
+      pushTextBlocks(blocks, '📝 전체 회의 내용', detail)
+      blocks.push({ type: 'divider' })
+    }
   }
 
+  // ② 결정사항 (full + brief)
+  if (format === 'full' || format === 'brief') {
+    const coreText = toStr(m.core).trim()
+    if (coreText) {
+      const coreBullets = coreText.split('\n')
+        .filter(Boolean)
+        .map((l: string) => `• ${l.replace(/^\d+\.\s*/, '')}`)
+        .join('\n')
+      blocks.push({ type: 'section', text: { type: 'mrkdwn', text: `*결정사항*\n${coreBullets}` } })
+    }
+  }
+
+  // ③ 액션 아이템 (전체 포맷)
   const actionLines = m.actions
     .map((a) => {
       const who = options.mention && a.assignee !== '미정' ? `<@${a.assignee}>` : a.assignee
@@ -47,6 +83,7 @@ function buildBlocks(title: string, m: MeetingMinutes, meta: { date: string; dur
     blocks.push({ type: 'section', text: { type: 'mrkdwn', text: `*액션 아이템*\n${actionLines}` } })
   }
 
+  // ④ 다음 스텝 (full 포맷만)
   if (format === 'full' && m.nextSteps?.length) {
     const nextLines = m.nextSteps.map((s, i) => `${i + 1}. ${s.title}`).join('\n')
     blocks.push({ type: 'section', text: { type: 'mrkdwn', text: `*다음 스텝 (AI 제안)*\n${nextLines}` } })
