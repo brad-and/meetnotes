@@ -457,11 +457,13 @@
   <span class="kw">var</span> result = items.<span class="fn">map</span>(<span class="kw">function</span>(e) {
     <span class="kw">var</span> guests    = e.<span class="fn">getGuestList</span>(<span class="kw">true</span>)  <span class="cm">// true = 주최자 포함</span>
     <span class="kw">var</span> attendees = guests.<span class="fn">map</span>(<span class="kw">function</span>(g) {
-      <span class="kw">var</span> gs = g.<span class="fn">getGuestStatus</span>()
-      <span class="kw">var</span> status = gs === CalendarApp.GuestStatus.YES     ? <span class="st">'accepted'</span>
-                 : gs === CalendarApp.GuestStatus.MAYBE   ? <span class="st">'tentative'</span>
-                 : gs === CalendarApp.GuestStatus.NO      ? <span class="st">'declined'</span>
-                 :                                          <span class="st">'needsAction'</span>
+      <span class="kw">var</span> status = <span class="st">'needsAction'</span>
+      <span class="kw">try</span> {
+        <span class="kw">var</span> gs = g.<span class="fn">getGuestStatus</span>()
+        <span class="kw">if</span>      (gs === CalendarApp.GuestStatus.YES)   status = <span class="st">'accepted'</span>
+        <span class="kw">else if</span> (gs === CalendarApp.GuestStatus.MAYBE) status = <span class="st">'tentative'</span>
+        <span class="kw">else if</span> (gs === CalendarApp.GuestStatus.NO)    status = <span class="st">'declined'</span>
+      } <span class="kw">catch</span>(err) { <span class="cm">/* 일부 시스템 참석자는 status 없음 → needsAction 유지 */</span> }
       <span class="kw">return</span> { email: g.<span class="fn">getEmail</span>(), status: status }
     })
     <span class="kw">return</span> {
