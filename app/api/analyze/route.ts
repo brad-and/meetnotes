@@ -1,5 +1,6 @@
 import { NextRequest, NextResponse } from 'next/server'
 import { GoogleGenerativeAI } from '@google/generative-ai'
+import { jsonrepair } from 'jsonrepair'
 
 const genAI = new GoogleGenerativeAI(process.env.GOOGLE_AI_API_KEY ?? '')
 
@@ -79,22 +80,35 @@ ${transcript}
     const match = text.match(/\{[\s\S]*\}/)
     if (match) {
       /**
-       * Gemini가 JSON string 내부에 삽입하는 다양한 문제를 수정하는 상태 머신:
-       *  1. raw 제어문자 (\n \r \t 및 기타 0x00-0x1F) → 이스케이프
-       *  2. 잘못된 이스케이프 시퀀스 (\명 \k 등) → 백슬래시를 \\ 로 변환
-       *     (JSON 허용 이스케이프: " \ / b f n r t u 만 유효)
+       * Gemini JSON 수정 3-레이어 전략:
+       *  Layer 1 — sanitizeJson 상태 머신:
+       *    · raw 제어문자 (0x00-0x1F) → 이스케이프
+       *    · 잘못된 이스케이프 시퀀스 (\명 \k 등) → \\ 로 변환
+       *    · 잘못된 이스케이프 뒤 제어문자도 이스케이프 처리 (기존 버그 수정)
+       *  Layer 2 — jsonrepair:
+       *    · 이스케이프되지 않은 따옴표, trailing comma, 누락 쉼표 등 처리
+       *  Layer 3 — 에러 반환 (두 방법 모두 실패 시)
        */
       const sanitizeJson = (s: string): string => {
         const VALID_ESC = new Set(['"', '\\', '/', 'b', 'f', 'n', 'r', 't', 'u'])
+        const escapeControlChar = (ch: string): string => {
+          if (ch === '\n') return '\\n'
+          if (ch === '\r') return '\\r'
+          if (ch === '\t') return '\\t'
+          const code = ch.charCodeAt(0)
+          if (code < 0x20) return `\\u${code.toString(16).padStart(4, '0')}`
+          return ch
+        }
         let out = ''
         let inStr = false
         let esc = false
         for (const ch of s) {
           if (esc) {
             if (VALID_ESC.has(ch)) {
-              out += ch                      // 유효한 이스케이프 → 그대로
+              out += ch                       // 유효한 이스케이프 → 그대로
             } else {
-              out = out.slice(0, -1) + '\\\\' + ch  // 잘못된 이스케이프 → \\ 로 변환
+              // 잘못된 이스케이프: 백슬래시를 \\로 변환 + 현재 문자도 제어문자면 이스케이프
+              out = out.slice(0, -1) + '\\\\' + escapeControlChar(ch)
             }
             esc = false
             continue
@@ -102,11 +116,8 @@ ${transcript}
           if (ch === '\\' && inStr) { out += ch; esc = true; continue }
           if (ch === '"') { out += ch; inStr = !inStr; continue }
           if (inStr) {
-            const code = ch.charCodeAt(0)
-            if (ch === '\n') { out += '\\n'; continue }
-            if (ch === '\r') { out += '\\r'; continue }
-            if (ch === '\t') { out += '\\t'; continue }
-            if (code < 0x20) { out += `\\u${code.toString(16).padStart(4, '0')}`; continue }
+            const escaped = escapeControlChar(ch)
+            if (escaped !== ch) { out += escaped; continue }
           }
           out += ch
         }
@@ -115,11 +126,19 @@ ${transcript}
 
       let raw: Record<string, unknown>
       try {
+        // Layer 1: 상태 머신 sanitize
         raw = JSON.parse(sanitizeJson(match[0]))
-      } catch (parseErr) {
-        console.error('JSON parse failed after sanitize:', parseErr)
-        console.error('Raw text (first 500):', text.slice(0, 500))
-        return NextResponse.json({ error: `JSON 파싱 실패: ${parseErr instanceof Error ? parseErr.message : String(parseErr)}` }, { status: 500 })
+      } catch (parseErr1) {
+        console.warn('sanitizeJson parse failed, trying jsonrepair:', parseErr1)
+        console.warn('Raw text (first 500):', text.slice(0, 500))
+        try {
+          // Layer 2: jsonrepair (unescaped quotes, trailing commas 등 처리)
+          raw = JSON.parse(jsonrepair(match[0]))
+          console.log('jsonrepair succeeded')
+        } catch (parseErr2) {
+          console.error('JSON parse failed after jsonrepair:', parseErr2)
+          return NextResponse.json({ error: `JSON 파싱 실패: ${parseErr2 instanceof Error ? parseErr2.message : String(parseErr2)}` }, { status: 500 })
+        }
       }
 
       // Gemini가 string 필드를 배열로 반환하는 경우 방어적 정규화
