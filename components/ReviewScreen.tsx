@@ -79,12 +79,14 @@ export default function ReviewScreen() {
     minutes, setMinutes, isAnalyzing, title, setTitle,
     utterances, elapsedSeconds, participants, audioUrl, audioMimeType,
     currentMeetingId, markSlackSent, resetMeeting, setStep,
+    analysisError, setAnalysisError, setAnalyzing,
   } = useMeetingStore()
   const [localMinutes, setLocalMinutes] = useState(minutes)
   const [showTranscript, setShowTranscript] = useState(false)
   const [showExportMenu, setShowExportMenu] = useState(false)
   const [copyStatus, setCopyStatus] = useState<CopyStatus>('idle')
   const [saveStatus, setSaveStatus] = useState<'idle' | 'saving' | 'done'>('idle')
+  const [retrying, setRetrying] = useState(false)
   const detailRef = useRef<HTMLTextAreaElement>(null)
 
   // detail textarea 높이 자동 조절
@@ -96,6 +98,50 @@ export default function ReviewScreen() {
   }, [])
 
   useEffect(() => { autoResizeDetail() }, [localMinutes?.detail, autoResizeDetail])
+
+  // AI 재분석: 오류 후 트랜스크립트로 다시 분석 시도
+  const handleRetryAnalysis = useCallback(async () => {
+    setRetrying(true)
+    setAnalysisError(null)
+    setAnalyzing(true)
+    const transcript = utterances
+      .filter((u) => u.isFinal)
+      .map((u) => `${u.speakerName}: ${u.text}`)
+      .join('\n')
+    try {
+      const res = await fetch('/api/analyze', {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({
+          transcript: transcript || '(트랜스크립트 없음)',
+          participants: participants.map((p) => p.name),
+          title,
+        }),
+      })
+      if (!res.ok) {
+        const text = await res.text()
+        throw new Error(`분석 API 오류 (${res.status}): ${text}`)
+      }
+      const data = await res.json()
+      if (data.minutes) {
+        setMinutes(data.minutes)
+        // DB 업데이트
+        if (currentMeetingId) {
+          await fetch(`/api/meetings/${currentMeetingId}`, {
+            method: 'PATCH',
+            headers: { 'Content-Type': 'application/json' },
+            body: JSON.stringify({ minutes: data.minutes, title }),
+          }).catch(() => {})
+        }
+      }
+    } catch (e) {
+      const errMsg = e instanceof Error ? e.message : String(e)
+      setAnalysisError(errMsg)
+    } finally {
+      setAnalyzing(false)
+      setRetrying(false)
+    }
+  }, [utterances, participants, title, currentMeetingId, setMinutes, setAnalysisError, setAnalyzing])
 
   const handleCopySlack = async () => {
     if (!localMinutes) return
@@ -320,17 +366,51 @@ export default function ReviewScreen() {
       <div style={{ maxWidth: 960, margin: '0 auto', display: 'grid', gridTemplateColumns: '1fr 252px', minHeight: 'calc(100vh - 96px)' }}>
         {/* Main editor */}
         <div style={{ overflowY: 'auto', padding: 24, borderRight: '1px solid #2a2a2a' }}>
-          {/* AI Banner */}
-          <div style={{
-            display: 'flex', alignItems: 'center', gap: 10,
-            background: '#1a3a1a', borderRadius: 6, padding: '10px 14px', marginBottom: 20,
-          }}>
-            <span style={{ fontSize: 16 }}>✨</span>
-            <div style={{ flex: 1 }}>
-              <div style={{ fontSize: 13, fontWeight: 700, color: '#1ed760' }}>AI 분석 완료 — 내용을 확인하고 수정해주세요.</div>
-              <div style={{ fontSize: 11, color: '#52d68a', marginTop: 1 }}>모든 섹션을 클릭해서 바로 편집할 수 있어요.</div>
+          {/* AI Banner — 오류 or 완료 */}
+          {analysisError ? (
+            <div style={{
+              display: 'flex', alignItems: 'flex-start', gap: 10,
+              background: '#2a1a1a', borderRadius: 6, padding: '12px 14px', marginBottom: 20,
+              border: '1px solid #5a2a2a',
+            }}>
+              <span style={{ fontSize: 18, flexShrink: 0 }}>⚠️</span>
+              <div style={{ flex: 1 }}>
+                <div style={{ fontSize: 13, fontWeight: 700, color: '#f3727f', marginBottom: 3 }}>
+                  AI 분석에 실패했어요. 트랜스크립트는 보존되어 있어요.
+                </div>
+                <div style={{ fontSize: 11, color: '#a06060', lineHeight: 1.5, marginBottom: 8, wordBreak: 'break-all' }}>
+                  {analysisError}
+                </div>
+                <button
+                  onClick={handleRetryAnalysis}
+                  disabled={retrying}
+                  style={{
+                    display: 'inline-flex', alignItems: 'center', gap: 6,
+                    background: '#3a1a1a', border: '1px solid #f3727f', borderRadius: 6,
+                    color: '#f3727f', fontSize: 12, fontWeight: 700,
+                    padding: '6px 14px', cursor: retrying ? 'not-allowed' : 'pointer',
+                    opacity: retrying ? 0.6 : 1,
+                  }}
+                >
+                  {retrying && (
+                    <div style={{ width: 11, height: 11, border: '2px solid rgba(243,114,127,0.3)', borderTop: '2px solid #f3727f', borderRadius: '50%', animation: 'spin .6s linear infinite' }} />
+                  )}
+                  {retrying ? 'AI 재분석 중...' : '🔄 AI 재분석'}
+                </button>
+              </div>
             </div>
-          </div>
+          ) : (
+            <div style={{
+              display: 'flex', alignItems: 'center', gap: 10,
+              background: '#1a3a1a', borderRadius: 6, padding: '10px 14px', marginBottom: 20,
+            }}>
+              <span style={{ fontSize: 16 }}>✨</span>
+              <div style={{ flex: 1 }}>
+                <div style={{ fontSize: 13, fontWeight: 700, color: '#1ed760' }}>AI 분석 완료 — 내용을 확인하고 수정해주세요.</div>
+                <div style={{ fontSize: 11, color: '#52d68a', marginTop: 1 }}>모든 섹션을 클릭해서 바로 편집할 수 있어요.</div>
+              </div>
+            </div>
+          )}
 
           {/* Title */}
           <input
@@ -448,15 +528,19 @@ export default function ReviewScreen() {
           <div style={{ padding: 16, flex: 1 }}>
             <span className="sp-label">수정 내역</span>
             {[
-              { color: '#1ed760', text: 'AI 분석 완료', time: '1분 전' },
-              { color: '#539df5', text: '녹음 종료', time: '3분 전' },
-              { color: '#4d4d4d', text: '회의 설정 완료', time: '28분 전' },
+              {
+                color: analysisError ? '#f3727f' : '#1ed760',
+                text: analysisError ? 'AI 분석 실패 — 트랜스크립트 보존됨' : 'AI 분석 완료',
+                time: '방금',
+              },
+              { color: '#539df5', text: '녹음 종료', time: '방금' },
+              { color: '#4d4d4d', text: '회의 설정 완료', time: '' },
             ].map((item, i) => (
               <div key={i} style={{ display: 'flex', alignItems: 'flex-start', gap: 8, marginBottom: 10 }}>
                 <div style={{ width: 6, height: 6, borderRadius: '50%', background: item.color, marginTop: 4, flexShrink: 0 }} />
                 <div>
                   <div style={{ fontSize: 12, color: '#b3b3b3' }}>{item.text}</div>
-                  <div style={{ fontSize: 10, color: '#4d4d4d', marginTop: 1 }}>{item.time}</div>
+                  {item.time && <div style={{ fontSize: 10, color: '#4d4d4d', marginTop: 1 }}>{item.time}</div>}
                 </div>
               </div>
             ))}

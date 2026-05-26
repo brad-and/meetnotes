@@ -100,6 +100,8 @@ interface MeetingStore {
   setAnalyzing: (v: boolean) => void
   minutes: MeetingMinutes | null
   setMinutes: (m: MeetingMinutes) => void
+  analysisError: string | null
+  setAnalysisError: (e: string | null) => void
   audioUrl: string | null
   setAudioUrl: (url: string | null) => void
   audioMimeType: string
@@ -191,6 +193,8 @@ export const useMeetingStore = create<MeetingStore>((set, get) => ({
   setAnalyzing: (isAnalyzing) => set({ isAnalyzing }),
   minutes: null,
   setMinutes: (minutes) => set({ minutes }),
+  analysisError: null,
+  setAnalysisError: (analysisError) => set({ analysisError }),
   audioUrl: null,
   setAudioUrl: (audioUrl) => set({ audioUrl }),
   audioMimeType: 'audio/webm',
@@ -211,6 +215,7 @@ export const useMeetingStore = create<MeetingStore>((set, get) => ({
       speakerMap: {},
       isAnalyzing: false,
       minutes: null,
+      analysisError: null,
       audioUrl: null,
       audioMimeType: 'audio/webm',
       currentMeetingId: null,

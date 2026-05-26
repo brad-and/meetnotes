@@ -24,7 +24,7 @@ export default function RecordingScreen() {
     isPaused, elapsedSeconds, utterances, participants,
     isRecording, setStep, setAnalyzing, setMinutes, title, addToHistory,
     meetingType, addUtterance, setElapsedSeconds, speakerMap, setSpeakerName, setAudioUrl, setAudioMimeType,
-    setCurrentMeetingId,
+    setCurrentMeetingId, setAnalysisError,
   } = useMeetingStore()
   const { startRecording, pauseRecording, resumeRecording, stopRecording, getAudioBlob, getAudioMimeType } = useDeepgram()
   const [activeTab, setActiveTab] = useState<'summary' | 'speakers' | 'actions'>('summary')
@@ -85,12 +85,16 @@ export default function RecordingScreen() {
     }
     setStep('review')
     setAnalyzing(true)
+    setAnalysisError(null)
 
     // Build transcript string
     const transcript = utterances
       .filter((u) => u.isFinal)
       .map((u) => `${u.speakerName}: ${u.text}`)
       .join('\n')
+
+    const meetingId = Date.now().toString()
+    const finalUtterances = utterances.filter((u) => u.isFinal)
 
     try {
       const res = await fetch('/api/analyze', {
@@ -109,8 +113,6 @@ export default function RecordingScreen() {
       const data = await res.json()
       if (data.minutes) {
         setMinutes(data.minutes)
-        const meetingId = Date.now().toString()
-        const finalUtterances = utterances.filter((u) => u.isFinal)
         setCurrentMeetingId(meetingId)
         await addToHistory({
           id: meetingId,
@@ -125,7 +127,31 @@ export default function RecordingScreen() {
         })
       }
     } catch (e) {
+      const errMsg = e instanceof Error ? e.message : String(e)
       console.error('Analysis error:', e)
+
+      // AI 분석 실패해도 트랜스크립트·참여자 정보를 보존
+      const fallbackMinutes = {
+        detail: transcript || '(트랜스크립트 없음)',
+        core: '',
+        keywords: [] as string[],
+        actions: [] as { id: string; text: string; assignee: string; due: string; priority: 'high' | 'medium' | 'low' }[],
+        nextSteps: [] as { title: string; reason: string }[],
+      }
+      setMinutes(fallbackMinutes)
+      setAnalysisError(errMsg)
+      setCurrentMeetingId(meetingId)
+      await addToHistory({
+        id: meetingId,
+        title,
+        date: new Date().toLocaleDateString('ko-KR'),
+        duration: elapsedSeconds,
+        participants: participants.map((p) => p.name),
+        minutes: fallbackMinutes,
+        utterances: finalUtterances,
+        slackSent: false,
+        archived: false,
+      }).catch((saveErr) => console.error('Fallback save error:', saveErr))
     } finally {
       setAnalyzing(false)
     }
