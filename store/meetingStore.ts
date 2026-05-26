@@ -76,6 +76,7 @@ interface MeetingStore {
   participants: Participant[]
   addParticipant: (p: Participant) => void
   removeParticipant: (id: string) => void
+  updateParticipantName: (id: string, name: string) => void
   slackChannel: string
   setSlackChannel: (c: string) => void
   aiOptions: { diarization: boolean; nextSteps: boolean; captions: boolean; history: boolean }
@@ -155,6 +156,8 @@ export const useMeetingStore = create<MeetingStore>((set, get) => ({
   addParticipant: (p) => set((s) => ({ participants: [...s.participants, p] })),
   removeParticipant: (id) =>
     set((s) => ({ participants: s.participants.filter((p) => p.id !== id) })),
+  updateParticipantName: (id, name) =>
+    set((s) => ({ participants: s.participants.map((p) => p.id === id ? { ...p, name } : p) })),
   slackChannel: '#product-team',
   setSlackChannel: (slackChannel) => set({ slackChannel }),
   aiOptions: { diarization: true, nextSteps: true, captions: true, history: true },

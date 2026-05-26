@@ -7,8 +7,9 @@ import type { CalendarEvent } from '@/app/api/calendar/events/route'
 export default function SetupScreen() {
   const {
     title, setTitle, meetingType, setMeetingType,
-    participants, addParticipant, removeParticipant,
+    participants, addParticipant, removeParticipant, updateParticipantName,
     slackChannel, setSlackChannel, aiOptions, toggleAiOption, setStep, meetingHistory, resetMeeting,
+    setSpeakerName,
   } = useMeetingStore()
 
   const [newName, setNewName] = useState('')
@@ -46,7 +47,13 @@ export default function SetupScreen() {
           setGscriptUrl(url)
           localStorage.setItem('calGScriptUrl', url)
         }
-        if (d.hostEmail) setHostEmail(d.hostEmail)
+        if (d.hostEmail) {
+          setHostEmail(d.hostEmail)
+          // 이메일 로컬파트를 그대로 사용 (점 포함): brad.and@... → "brad.and"
+          const hostName = d.hostEmail.split('@')[0]
+          setSpeakerName('Speaker 0', hostName)   // 실시간 녹음 시 Speaker 0 → brad.and
+          updateParticipantName('1', hostName)    // 참여자 칩 이름 업데이트
+        }
       })
       .catch(() => {
         const saved = localStorage.getItem('calGScriptUrl')
@@ -139,7 +146,7 @@ export default function SetupScreen() {
       : filtered
 
     sorted.slice(0, 8).forEach((email, i) => {
-      const name = email.split('@')[0].replace(/\./g, ' ').replace(/\b\w/g, (c) => c.toUpperCase())
+      const name = email.split('@')[0]  // 점(.) 포함 그대로 사용: brad.and
       const colorIdx = (i + 1) % COLORS.length
       addParticipant({ id: `cal-${ev.id}-${i}`, name, ...COLORS[colorIdx] })
     })
