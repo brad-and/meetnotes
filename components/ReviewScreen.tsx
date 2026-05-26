@@ -78,7 +78,7 @@ export default function ReviewScreen() {
   const {
     minutes, setMinutes, isAnalyzing, title, setTitle,
     utterances, elapsedSeconds, participants, audioUrl, audioMimeType,
-    currentMeetingId, markSlackSent, resetMeeting,
+    currentMeetingId, markSlackSent, resetMeeting, setStep,
   } = useMeetingStore()
   const [localMinutes, setLocalMinutes] = useState(minutes)
   const [showTranscript, setShowTranscript] = useState(false)
@@ -123,17 +123,35 @@ export default function ReviewScreen() {
     }
   }
 
+  // DB에 최신 내용 저장
+  const saveToDb = async () => {
+    if (currentMeetingId && localMinutes) {
+      await fetch(`/api/meetings/${currentMeetingId}`, {
+        method: 'PATCH',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ minutes: localMinutes, title }),
+      })
+    }
+  }
+
+  // Slack 전송 스텝으로 이동 (저장 후)
+  const handleGoToSlack = async () => {
+    setSaveStatus('saving')
+    try {
+      await saveToDb()
+      setSaveStatus('idle')
+      setStep('slack')
+    } catch {
+      setSaveStatus('idle')
+      setStep('slack')
+    }
+  }
+
+  // 저장 후 홈으로 (Slack 없이 완료)
   const handleSaveAndFinish = async () => {
     setSaveStatus('saving')
     try {
-      // 편집된 minutes·title을 DB에 반영
-      if (currentMeetingId && localMinutes) {
-        await fetch(`/api/meetings/${currentMeetingId}`, {
-          method: 'PATCH',
-          headers: { 'Content-Type': 'application/json' },
-          body: JSON.stringify({ minutes: localMinutes, title }),
-        })
-      }
+      await saveToDb()
       setSaveStatus('done')
       setTimeout(() => resetMeeting(), 800)
     } catch {
@@ -274,22 +292,27 @@ export default function ReviewScreen() {
             )}
           </div>
 
-          {/* Slack 복사 */}
-          <button className="btn-pill" onClick={handleCopySlack} disabled={copyStatus === 'copied'}>
-            {copyStatus === 'copied' ? '✓ 복사됨!' : '💬 Slack 복사'}
-          </button>
-
-          {/* 저장 완료 · 홈으로 */}
+          {/* Slack 전송 스텝으로 */}
           <button
             className="btn-green"
-            onClick={handleSaveAndFinish}
-            disabled={saveStatus !== 'idle'}
+            onClick={handleGoToSlack}
+            disabled={saveStatus === 'saving'}
             style={{ display: 'flex', alignItems: 'center', gap: 6 }}
           >
             {saveStatus === 'saving' && (
               <div style={{ width: 12, height: 12, border: '2px solid rgba(0,0,0,0.3)', borderTop: '2px solid #000', borderRadius: '50%', animation: 'spin .6s linear infinite' }} />
             )}
-            {saveStatus === 'done' ? '✓ 저장 완료!' : saveStatus === 'saving' ? '저장 중...' : '저장 완료 →'}
+            💬 Slack 전송 →
+          </button>
+
+          {/* Slack 없이 완료 */}
+          <button
+            className="btn-pill"
+            onClick={handleSaveAndFinish}
+            disabled={saveStatus !== 'idle'}
+            style={{ display: 'flex', alignItems: 'center', gap: 6 }}
+          >
+            {saveStatus === 'done' ? '✓ 완료!' : saveStatus === 'saving' ? '저장 중...' : '완료'}
           </button>
         </div>
       </Topbar>
