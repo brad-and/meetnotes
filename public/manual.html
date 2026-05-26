@@ -457,7 +457,12 @@
   <span class="kw">var</span> result = items.<span class="fn">map</span>(<span class="kw">function</span>(e) {
     <span class="kw">var</span> guests    = e.<span class="fn">getGuestList</span>(<span class="kw">true</span>)  <span class="cm">// true = 주최자 포함</span>
     <span class="kw">var</span> attendees = guests.<span class="fn">map</span>(<span class="kw">function</span>(g) {
-      <span class="kw">return</span> g.<span class="fn">getEmail</span>()
+      <span class="kw">var</span> gs = g.<span class="fn">getGuestStatus</span>()
+      <span class="kw">var</span> status = gs === CalendarApp.GuestStatus.YES     ? <span class="st">'accepted'</span>
+                 : gs === CalendarApp.GuestStatus.MAYBE   ? <span class="st">'tentative'</span>
+                 : gs === CalendarApp.GuestStatus.NO      ? <span class="st">'declined'</span>
+                 :                                          <span class="st">'needsAction'</span>
+      <span class="kw">return</span> { email: g.<span class="fn">getEmail</span>(), status: status }
     })
     <span class="kw">return</span> {
       id:        e.<span class="fn">getId</span>().<span class="fn">replace</span>(<span class="st">'@google.com'</span>, <span class="st">''</span>),

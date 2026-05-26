@@ -137,16 +137,30 @@ export default function SetupScreen() {
       .filter((p) => p.id.startsWith('cal-'))
       .forEach((p) => removeParticipant(p.id))
 
-    // 참석자 목록 — hostEmail이 있으면 본인을 맨 앞으로 정렬 (→ "나 (진행자)" 레이블)
-    const filtered = ev.attendees.filter((e) => !e.includes('resource.calendar'))
-    const myEmail  = hostEmail.trim().toLowerCase()
-    const sorted   = myEmail
-      ? [...filtered.filter((e) => e.toLowerCase() === myEmail),
-         ...filtered.filter((e) => e.toLowerCase() !== myEmail)]
-      : filtered
+    // 구형(string) / 신형({email,status}) 두 포맷 모두 정규화
+    const normalized = ev.attendees.map((a) =>
+      typeof a === 'string'
+        ? { email: a, status: 'accepted' as const }  // 구형 캐시는 수락으로 간주
+        : a
+    )
 
-    sorted.slice(0, 8).forEach((email, i) => {
-      const name = email.split('@')[0]  // 점(.) 포함 그대로 사용: brad.and
+    // resource.calendar(회의실) 제외 + 거절/미응답 제외 → 수락·미정만
+    const responded = normalized.filter(
+      (a) => !a.email.includes('resource.calendar')
+            && a.status !== 'declined'
+            && a.status !== 'needsAction'
+    )
+
+    // hostEmail이 있으면 본인을 맨 앞으로 정렬
+    const myEmail = hostEmail.trim().toLowerCase()
+    const sorted  = myEmail
+      ? [...responded.filter((a) => a.email.toLowerCase() === myEmail),
+         ...responded.filter((a) => a.email.toLowerCase() !== myEmail)]
+      : responded
+
+    // 인원 제한 없이 전원 추가
+    sorted.forEach((attendee, i) => {
+      const name     = attendee.email.split('@')[0]  // brad.and (점 포함)
       const colorIdx = (i + 1) % COLORS.length
       addParticipant({ id: `cal-${ev.id}-${i}`, name, ...COLORS[colorIdx] })
     })

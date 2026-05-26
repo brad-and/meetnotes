@@ -2,12 +2,18 @@ import { NextResponse } from 'next/server'
 import { readFileSync } from 'fs'
 import { join } from 'path'
 
+export interface CalendarAttendee {
+  email: string
+  status: 'accepted' | 'tentative' | 'declined' | 'needsAction'
+}
+
 export interface CalendarEvent {
   id: string
   title: string
   start: string        // ISO 8601
   end: string
-  attendees: string[]  // 이메일 목록
+  /** GScript v2: CalendarAttendee[], 구형 캐시 호환: string[] */
+  attendees: (CalendarAttendee | string)[]
   location?: string
   meetUrl?: string
 }
