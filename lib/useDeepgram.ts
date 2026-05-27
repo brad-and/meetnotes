@@ -22,19 +22,24 @@ export function mimeTypeToExt(mimeType: string): string {
 }
 
 export function useDeepgram() {
-  const wsRef = useRef<WebSocket | null>(null)
-  const mediaRecorderRef = useRef<MediaRecorder | null>(null)
-  const streamRef = useRef<MediaStream | null>(null)
-  const timerRef = useRef<NodeJS.Timeout | null>(null)
-  const audioChunksRef = useRef<Blob[]>([])
-  const mimeTypeRef = useRef<string>('audio/webm')   // 실제 사용된 포맷 추적
+  const wsRef               = useRef<WebSocket | null>(null)
+  const mediaRecorderRef    = useRef<MediaRecorder | null>(null)
+  const streamRef           = useRef<MediaStream | null>(null)
+  const timerRef            = useRef<NodeJS.Timeout | null>(null)
+  const audioChunksRef      = useRef<Blob[]>([])
+  const mimeTypeRef         = useRef<string>('audio/webm')
 
-  // 현재 작성 중인 발화 ID를 추적 (null = 현재 펜딩 행 없음)
-  const pendingIdRef = useRef<string | null>(null)
-  // UtteranceEnd가 먼저 처리했는지 추적 → speech_final 중복 방지
-  const utteranceEndedRef = useRef<boolean>(false)
-  // StrictMode 이중 마운트 방어: 가장 최신 startRecording 호출만 유효
-  const recordingGenRef = useRef(0)
+  // Web Audio API 처리 체인
+  const audioCtxRef         = useRef<AudioContext | null>(null)
+  const gainNodeRef         = useRef<GainNode | null>(null)
+  const analyserRef         = useRef<AnalyserNode | null>(null)
+  const gainLevelRef        = useRef<number>(2.0)   // 기본 2x 부스트
+  const deviceIdRef         = useRef<string>('')    // '' = 기본 마이크
+
+  // 발화 추적
+  const pendingIdRef        = useRef<string | null>(null)
+  const utteranceEndedRef   = useRef<boolean>(false)
+  const recordingGenRef     = useRef(0)
 
   const { setRecording, setPaused, setElapsedSeconds } = useMeetingStore()
 
@@ -45,40 +50,122 @@ export function useDeepgram() {
     return `${h}:${m}:${sec}`
   }
 
-  const startRecording = useCallback(async () => {
-    const gen = ++recordingGenRef.current   // 이 호출의 세대 번호
-    try {
-      const stream = await navigator.mediaDevices.getUserMedia({ audio: true })
+  /** 현재 마이크 볼륨 레벨 반환 (0-100) */
+  const getVolumeLevel = useCallback((): number => {
+    if (!analyserRef.current) return 0
+    const bufferLength = analyserRef.current.fftSize
+    const dataArray    = new Uint8Array(bufferLength)
+    analyserRef.current.getByteTimeDomainData(dataArray)
+    // RMS (Root Mean Square) 계산
+    let sum = 0
+    for (let i = 0; i < bufferLength; i++) {
+      const sample = (dataArray[i] - 128) / 128  // -1 ~ 1 정규화
+      sum += sample * sample
+    }
+    const rms = Math.sqrt(sum / bufferLength)
+    return Math.min(100, rms * 350)  // 0-100 스케일
+  }, [])
 
-      // 더 최신 호출이 생겼으면 이 호출은 폐기
+  /** 실시간으로 게인(감도) 조절 — 녹음 중에도 즉시 반영 */
+  const setGain = useCallback((level: number) => {
+    gainLevelRef.current = level
+    if (gainNodeRef.current) gainNodeRef.current.gain.value = level
+  }, [])
+
+  const startRecording = useCallback(async (deviceId?: string) => {
+    const gen = ++recordingGenRef.current
+    // deviceId가 전달되면 ref 업데이트
+    if (deviceId !== undefined) deviceIdRef.current = deviceId
+
+    try {
+      // ── 1. 향상된 오디오 제약 ───────────────────────────────────────────
+      const audioConstraints: MediaTrackConstraints = {
+        echoCancellation: true,    // 에코 제거 (스피커 → 마이크 피드백 방지)
+        noiseSuppression: true,    // 배경 소음 억제 (키보드, 에어컨 등)
+        autoGainControl: true,     // 브라우저 내장 자동 게인 (조용한 환경 보정)
+        channelCount: 1,           // 모노 (파일 크기 절반, Deepgram 권장)
+        sampleRate: { ideal: 16000 },  // Deepgram 최적 샘플레이트
+      }
+      if (deviceIdRef.current) {
+        audioConstraints.deviceId = { exact: deviceIdRef.current }
+      }
+
+      const stream = await navigator.mediaDevices.getUserMedia({ audio: audioConstraints })
+
       if (gen !== recordingGenRef.current) {
         stream.getTracks().forEach((t) => t.stop())
         return
       }
       streamRef.current = stream
 
+      // ── 2. Web Audio API 처리 체인 ────────────────────────────────────
+      // source → gainNode → compressor → analyser → destination
+      const audioCtx = new AudioContext()
+      audioCtxRef.current = audioCtx
+
+      const source = audioCtx.createMediaStreamSource(stream)
+
+      // GainNode: 조용한 목소리 증폭 (gainLevelRef 값으로 실시간 조절 가능)
+      const gainNode = audioCtx.createGain()
+      gainNode.gain.value = gainLevelRef.current
+      gainNodeRef.current = gainNode
+
+      // DynamicsCompressor: 큰 소리 클리핑 방지 + 전체 다이나믹 레인지 압축
+      //   → 작은 목소리와 큰 목소리가 비슷한 레벨로 맞춰짐
+      const compressor = audioCtx.createDynamicsCompressor()
+      compressor.threshold.value = -24  // -24dB 이상 압축 시작
+      compressor.knee.value       = 30  // 소프트 니 (자연스러운 전환)
+      compressor.ratio.value      = 12  // 12:1 강압축
+      compressor.attack.value     = 0.003
+      compressor.release.value    = 0.25
+
+      // AnalyserNode: 볼륨 레벨 모니터링 (VU 미터용)
+      const analyser = audioCtx.createAnalyser()
+      analyser.fftSize              = 512
+      analyser.smoothingTimeConstant = 0.8  // 부드러운 시각화
+      analyserRef.current           = analyser
+
+      // 처리 체인 연결
+      const destination = audioCtx.createMediaStreamDestination()
+      source.connect(gainNode)
+      gainNode.connect(compressor)
+      compressor.connect(analyser)
+      analyser.connect(destination)
+
+      // 처리된 스트림을 WebSocket 전송과 녹음에 사용
+      const processedStream = destination.stream
+
+      // ── 3. Deepgram 토큰 발급 ────────────────────────────────────────
       const tokenRes = await fetch('/api/transcribe/token')
-      if (gen !== recordingGenRef.current) return   // 폐기 체크
+      if (gen !== recordingGenRef.current) return
       const { token } = await tokenRes.json()
 
+      // ── 4. Deepgram WebSocket — 향상된 파라미터 ───────────────────────
       const ws = new WebSocket(
         `wss://api.deepgram.com/v1/listen?` +
-        `language=ko&model=nova-2&diarize=true&` +
-        `punctuate=true&interim_results=true&` +
-        `utterance_end_ms=1000&vad_events=true`,
+        `language=ko` +
+        `&model=nova-2` +
+        `&diarize=true` +
+        `&punctuate=true` +
+        `&smart_format=true` +          // 숫자, 날짜, 통화 자동 포맷
+        `&interim_results=true` +
+        `&utterance_end_ms=1500` +      // 1000 → 1500: 자연스러운 발화 경계
+        `&endpointing=380` +            // 발화 종료 민감도 최적화
+        `&vad_events=true`,
         ['token', token]
       )
-      if (gen !== recordingGenRef.current) { ws.close(); return }  // 폐기 체크
+      if (gen !== recordingGenRef.current) { ws.close(); return }
       wsRef.current = ws
 
       ws.onopen = () => {
-        if (gen !== recordingGenRef.current) { ws.close(); return }  // 폐기 체크
-        audioChunksRef.current = []
-        pendingIdRef.current = null
+        if (gen !== recordingGenRef.current) { ws.close(); return }
+        audioChunksRef.current  = []
+        pendingIdRef.current    = null
         utteranceEndedRef.current = false
         const mimeType = pickMimeType()
         mimeTypeRef.current = mimeType
-        const mediaRecorder = new MediaRecorder(stream, { mimeType })
+        // 처리된 스트림(gain+compressor)으로 MediaRecorder 생성
+        const mediaRecorder = new MediaRecorder(processedStream, { mimeType })
         mediaRecorderRef.current = mediaRecorder
         mediaRecorder.ondataavailable = (e) => {
           if (e.data.size > 0) audioChunksRef.current.push(e.data)
@@ -95,49 +182,43 @@ export function useDeepgram() {
 
         const store = useMeetingStore.getState()
 
-        // ── UtteranceEnd: 펜딩 행이 있으면 확정, ref 초기화 ──────────
+        // ── UtteranceEnd ────────────────────────────────────────────────
         if (data.type === 'UtteranceEnd') {
           if (pendingIdRef.current !== null) {
             store.finalizeLastUtterance(
               store.utterances.find(u => !u.isFinal)?.text ?? ''
             )
-            pendingIdRef.current = null
-            utteranceEndedRef.current = true  // speech_final이 나중에 와도 중복 방지
+            pendingIdRef.current    = null
+            utteranceEndedRef.current = true
           }
           return
         }
 
         if (!data.channel?.alternatives?.[0]) return
-        const alt = data.channel.alternatives[0]
+        const alt        = data.channel.alternatives[0]
         const transcript = alt.transcript?.trim()
         if (!transcript) return
 
-        // speaker/name은 최종 결과에서 가장 정확 — 항상 최신 store에서 읽음
-        const speaker = `Speaker ${alt.words?.[0]?.speaker ?? 0}`
+        const speaker     = `Speaker ${alt.words?.[0]?.speaker ?? 0}`
         const speakerName = store.speakerMap[speaker] || speaker
-        const ts = formatTime(store.elapsedSeconds)
+        const ts          = formatTime(store.elapsedSeconds)
         const isSpeechFinal: boolean = data.speech_final === true
 
         if (isSpeechFinal) {
-          // ── 발화 완료 ────────────────────────────────────────────────
           if (pendingIdRef.current !== null) {
-            // 정상 케이스: speech_final이 UtteranceEnd보다 먼저 도착
             store.finalizeLastUtterance(transcript)
-            pendingIdRef.current = null
+            pendingIdRef.current    = null
             utteranceEndedRef.current = false
           } else if (utteranceEndedRef.current) {
-            // UtteranceEnd가 이미 처리함 → 중복 생성 방지, 플래그만 초기화
             utteranceEndedRef.current = false
           } else {
-            // 드문 케이스: 펜딩 없이 speech_final 도착 (is_final 없이 바로 확정)
             store.addUtterance({
               id: `sf-${Date.now()}`,
               speaker, speakerName, text: transcript, timestamp: ts, isFinal: true,
             })
           }
         } else if (data.is_final) {
-          // ── 청크 확정 (발화 계속) ────────────────────────────────────
-          utteranceEndedRef.current = false  // 새 청크 시작 → 플래그 초기화
+          utteranceEndedRef.current = false
           if (pendingIdRef.current !== null) {
             store.updateLastUtterance(transcript)
           } else {
@@ -148,8 +229,7 @@ export function useDeepgram() {
             })
           }
         } else {
-          // ── 인터림 (임시) ──────────────────────────────────────────────
-          utteranceEndedRef.current = false  // 새 발화 시작 → 플래그 초기화
+          utteranceEndedRef.current = false
           if (pendingIdRef.current !== null) {
             store.updateLastUtterance(transcript)
           } else {
@@ -198,12 +278,17 @@ export function useDeepgram() {
   }, [setPaused, setElapsedSeconds])
 
   const stopRecording = useCallback(() => {
-    recordingGenRef.current++          // 진행 중인 startRecording 비동기 흐름 폐기
+    recordingGenRef.current++
     mediaRecorderRef.current?.stop()
     wsRef.current?.close()
     streamRef.current?.getTracks().forEach((t) => t.stop())
+    // Web Audio 정리
+    audioCtxRef.current?.close().catch(() => {})
+    audioCtxRef.current  = null
+    gainNodeRef.current  = null
+    analyserRef.current  = null
     if (timerRef.current) clearInterval(timerRef.current)
-    pendingIdRef.current = null
+    pendingIdRef.current      = null
     utteranceEndedRef.current = false
     setRecording(false)
     setPaused(false)
@@ -216,5 +301,18 @@ export function useDeepgram() {
 
   const getAudioMimeType = useCallback(() => mimeTypeRef.current, [])
 
-  return { startRecording, pauseRecording, resumeRecording, stopRecording, getAudioBlob, getAudioMimeType }
+  return {
+    startRecording,
+    pauseRecording,
+    resumeRecording,
+    stopRecording,
+    getAudioBlob,
+    getAudioMimeType,
+    /** 게인 레벨 실시간 변경 (0.5 ~ 4.0) */
+    setGain,
+    /** 현재 마이크 볼륨 레벨 (0-100), requestAnimationFrame에서 호출 */
+    getVolumeLevel,
+    /** 현재 게인 초기값 (UI 슬라이더 초기화용) */
+    gainLevelRef,
+  }
 }

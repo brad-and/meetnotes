@@ -7,6 +7,12 @@ import Topbar from '@/components/ui/Topbar'
 const SPEAKER_COLORS = ['#1ed760', '#539df5', '#ffa42b', '#c77dff', '#f3727f']
 const SPEAKER_BG = ['#1a3a1a', '#1a2a3a', '#3a2a1a', '#2a1a3a', '#3a1a1a']
 
+const GAIN_PRESETS = [0.5, 1.0, 1.5, 2.0, 3.0, 4.0]
+const GAIN_LABELS: Record<number, string> = {
+  0.5: '0.5x', 1.0: '1x', 1.5: '1.5x', 2.0: '2x', 3.0: '3x', 4.0: '4x',
+}
+const BAR_COUNT = 24
+
 function formatTime(s: number) {
   const h = Math.floor(s / 3600).toString().padStart(2, '0')
   const m = Math.floor((s % 3600) / 60).toString().padStart(2, '0')
@@ -26,7 +32,7 @@ export default function RecordingScreen() {
     meetingType, addUtterance, setElapsedSeconds, speakerMap, setSpeakerName, setAudioUrl, setAudioMimeType,
     setCurrentMeetingId, setAnalysisError,
   } = useMeetingStore()
-  const { startRecording, pauseRecording, resumeRecording, stopRecording, getAudioBlob, getAudioMimeType } = useDeepgram()
+  const { startRecording, pauseRecording, resumeRecording, stopRecording, getAudioBlob, getAudioMimeType, setGain, getVolumeLevel, gainLevelRef } = useDeepgram()
   const [activeTab, setActiveTab] = useState<'summary' | 'speakers' | 'actions'>('summary')
   const transcriptRef = useRef<HTMLDivElement>(null)
 
@@ -36,9 +42,74 @@ export default function RecordingScreen() {
   const [uploadDone, setUploadDone] = useState(false)
   const fileInputRef = useRef<HTMLInputElement>(null)
 
+  // ── 마이크 감도 & 기기 선택 ────────────────────────────────────────────
+  const [gainLevel, setGainLevel]         = useState<number>(gainLevelRef.current)
+  const [micDevices, setMicDevices]       = useState<MediaDeviceInfo[]>([])
+  const [selectedMicId, setSelectedMicId] = useState<string>('')
+  const [showMicMenu, setShowMicMenu]     = useState(false)
+  // VU 미터 애니메이션
+  const [volumeBars, setVolumeBars]       = useState<number[]>(Array(BAR_COUNT).fill(4))
+  const animFrameRef                      = useRef<number | null>(null)
+
+  // 마이크 목록 가져오기 (권한 허용 후에야 label 표시)
+  useEffect(() => {
+    const load = () =>
+      navigator.mediaDevices.enumerateDevices()
+        .then((devices) => setMicDevices(devices.filter((d) => d.kind === 'audioinput')))
+        .catch(console.error)
+    load()
+    navigator.mediaDevices.addEventListener('devicechange', load)
+    return () => navigator.mediaDevices.removeEventListener('devicechange', load)
+  }, [])
+
+  // VU 미터 — requestAnimationFrame 루프
+  useEffect(() => {
+    if (!isRecording || isPaused) {
+      setVolumeBars(Array(BAR_COUNT).fill(4))
+      return
+    }
+    const animate = () => {
+      const level = getVolumeLevel()  // 0-100
+      const bars  = Array.from({ length: BAR_COUNT }, (_, i) => {
+        // 가운데가 높은 종형 곡선 + 실제 볼륨 연동
+        const center  = (BAR_COUNT - 1) / 2
+        const dist    = Math.abs(i - center) / center          // 0 = 중앙, 1 = 끝
+        const bell    = 1 - dist * 0.55                         // 종형 계수
+        const height  = Math.max(3, level * bell)
+        const jitter  = level > 3 ? (Math.random() - 0.5) * level * 0.3 : 0
+        return Math.min(26, Math.max(3, height + jitter))
+      })
+      setVolumeBars(bars)
+      animFrameRef.current = requestAnimationFrame(animate)
+    }
+    animFrameRef.current = requestAnimationFrame(animate)
+    return () => {
+      if (animFrameRef.current) cancelAnimationFrame(animFrameRef.current)
+    }
+  }, [isRecording, isPaused, getVolumeLevel])
+
+  // 마이크 변경 — 녹음 중이면 재시작
+  const handleMicChange = useCallback(async (deviceId: string) => {
+    setSelectedMicId(deviceId)
+    setShowMicMenu(false)
+    if (isRecording) {
+      stopRecording()
+      await new Promise((r) => setTimeout(r, 150))  // 트랙 해제 대기
+      startRecording(deviceId)
+    }
+  }, [isRecording, stopRecording, startRecording])
+
+  // 게인 프리셋 순환
+  const cycleGain = useCallback(() => {
+    const idx     = GAIN_PRESETS.indexOf(gainLevel)
+    const next    = GAIN_PRESETS[(idx + 1) % GAIN_PRESETS.length]
+    setGainLevel(next)
+    setGain(next)
+  }, [gainLevel, setGain])
+
   useEffect(() => {
     if (meetingType === 'face') {
-      startRecording()
+      startRecording(selectedMicId || undefined)
       return () => stopRecording()
     }
   }, [meetingType])
@@ -362,27 +433,120 @@ export default function RecordingScreen() {
             })}
           </div>
 
-          {/* Waveform */}
+          {/* 마이크 선택 바 (2개 이상 마이크 감지 시 표시) */}
+          {micDevices.length > 1 && (
+            <div style={{
+              padding: '6px 18px', borderTop: '1px solid #2a2a2a',
+              background: '#141414', position: 'relative',
+            }}>
+              <button
+                onClick={() => setShowMicMenu((v) => !v)}
+                style={{
+                  display: 'flex', alignItems: 'center', gap: 6, background: 'none',
+                  border: '1px solid #2a2a2a', borderRadius: 6, padding: '4px 10px',
+                  cursor: 'pointer', color: '#b3b3b3', fontSize: 11,
+                }}
+              >
+                <svg width="12" height="12" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round">
+                  <path d="M12 2a3 3 0 0 0-3 3v7a3 3 0 0 0 6 0V5a3 3 0 0 0-3-3z"/>
+                  <path d="M19 10v2a7 7 0 0 1-14 0v-2M12 19v3"/>
+                </svg>
+                <span style={{ maxWidth: 200, overflow: 'hidden', textOverflow: 'ellipsis', whiteSpace: 'nowrap' }}>
+                  {micDevices.find((d) => d.deviceId === selectedMicId)?.label
+                    || micDevices[0]?.label
+                    || '기본 마이크'}
+                </span>
+                <span style={{ fontSize: 9, color: '#4d4d4d' }}>▾</span>
+              </button>
+
+              {showMicMenu && (
+                <div style={{
+                  position: 'absolute', bottom: '100%', left: 18, zIndex: 50,
+                  background: '#252525', border: '1px solid #3a3a3a', borderRadius: 8,
+                  padding: 4, minWidth: 260, boxShadow: '0 -4px 24px rgba(0,0,0,.5)',
+                }}>
+                  {micDevices.map((d) => (
+                    <button
+                      key={d.deviceId}
+                      onClick={() => handleMicChange(d.deviceId)}
+                      style={{
+                        display: 'block', width: '100%', textAlign: 'left',
+                        padding: '8px 12px', fontSize: 12, cursor: 'pointer',
+                        background: d.deviceId === (selectedMicId || micDevices[0]?.deviceId)
+                          ? '#1a3a1a' : 'transparent',
+                        color: d.deviceId === (selectedMicId || micDevices[0]?.deviceId)
+                          ? '#1ed760' : '#b3b3b3',
+                        border: 'none', borderRadius: 6,
+                        whiteSpace: 'nowrap', overflow: 'hidden', textOverflow: 'ellipsis',
+                      }}
+                    >
+                      {d.label || `마이크 ${micDevices.indexOf(d) + 1}`}
+                    </button>
+                  ))}
+                </div>
+              )}
+            </div>
+          )}
+
+          {/* VU 미터 + 게인 컨트롤 */}
           <div style={{
-            padding: '10px 18px', borderTop: '1px solid #2a2a2a',
-            background: '#181818', display: 'flex', alignItems: 'center', gap: 12,
+            padding: '8px 18px', borderTop: '1px solid #2a2a2a',
+            background: '#181818', display: 'flex', alignItems: 'center', gap: 10,
           }}>
-            <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="#1ed760" strokeWidth="2.5" strokeLinecap="round">
+            {/* 마이크 아이콘 */}
+            <svg width="15" height="15" viewBox="0 0 24 24" fill="none"
+              stroke={isPaused ? '#4d4d4d' : '#1ed760'} strokeWidth="2.5" strokeLinecap="round">
               <path d="M12 2a3 3 0 0 0-3 3v7a3 3 0 0 0 6 0V5a3 3 0 0 0-3-3z"/>
               <path d="M19 10v2a7 7 0 0 1-14 0v-2M12 19v3"/>
             </svg>
-            <div style={{ flex: 1, height: 28, display: 'flex', alignItems: 'center', gap: 2 }}>
-              {Array.from({ length: 20 }, (_, i) => (
-                <div key={i} style={{
-                  width: 3, borderRadius: 2,
-                  background: isPaused ? '#4d4d4d' : '#1ed760',
-                  opacity: isPaused ? .4 : .8,
-                  height: `${8 + Math.sin(i * 0.8) * 8 + 4}px`,
-                  animation: isPaused ? 'none' : `wave ${(0.4 + i * 0.05).toFixed(2)}s ease-in-out infinite alternate`,
-                }} />
-              ))}
+
+            {/* 실시간 VU 미터 */}
+            <div style={{ flex: 1, height: 28, display: 'flex', alignItems: 'center', gap: 1.5 }}>
+              {volumeBars.map((h, i) => {
+                // 볼륨 높이에 따라 초록 → 노랑 → 빨강 그라디언트
+                const ratio = h / 26
+                const color = isPaused ? '#2a2a2a'
+                  : ratio > 0.85 ? '#f3727f'   // 클리핑 위험
+                  : ratio > 0.60 ? '#ffa42b'   // 높음
+                  : '#1ed760'                  // 정상
+                return (
+                  <div
+                    key={i}
+                    style={{
+                      width: 3, borderRadius: 2,
+                      height: `${h}px`,
+                      background: color,
+                      opacity: isPaused ? 0.3 : 0.9,
+                      transition: isPaused ? 'none' : 'height 60ms ease-out',
+                    }}
+                  />
+                )
+              })}
             </div>
-            <span style={{ fontSize: 11, fontWeight: 700, color: '#b3b3b3', textTransform: 'uppercase', letterSpacing: '1.4px' }}>
+
+            {/* 게인(감도) 조절 버튼 */}
+            <button
+              onClick={cycleGain}
+              title="클릭하여 마이크 감도 변경"
+              style={{
+                display: 'flex', alignItems: 'center', gap: 4,
+                background: gainLevel > 1.5 ? '#1a3a1a' : '#1f1f1f',
+                border: `1px solid ${gainLevel > 1.5 ? '#1ed760' : '#2a2a2a'}`,
+                borderRadius: 6, padding: '3px 8px', cursor: 'pointer',
+                color: gainLevel > 1.5 ? '#1ed760' : '#b3b3b3',
+                fontSize: 11, fontWeight: 700, whiteSpace: 'nowrap',
+              }}
+            >
+              <svg width="11" height="11" viewBox="0 0 24 24" fill="none"
+                stroke="currentColor" strokeWidth="2.5" strokeLinecap="round">
+                <line x1="12" y1="20" x2="12" y2="10"/>
+                <line x1="18" y1="20" x2="18" y2="4"/>
+                <line x1="6" y1="20" x2="6" y2="16"/>
+              </svg>
+              {GAIN_LABELS[gainLevel] ?? `${gainLevel}x`}
+            </button>
+
+            <span style={{ fontSize: 10, fontWeight: 700, color: '#4d4d4d', textTransform: 'uppercase', letterSpacing: '1.2px', whiteSpace: 'nowrap' }}>
               {isPaused ? '일시정지' : '입력 중'}
             </span>
           </div>

@@ -158,12 +158,14 @@ export default function SetupScreen() {
          ...responded.filter((a) => a.email.toLowerCase() !== myEmail)]
       : responded
 
-    // 인원 제한 없이 전원 추가
-    sorted.forEach((attendee, i) => {
-      const name     = attendee.email.split('@')[0]  // brad.and (점 포함)
-      const colorIdx = (i + 1) % COLORS.length
-      addParticipant({ id: `cal-${ev.id}-${i}`, name, ...COLORS[colorIdx] })
-    })
+    // 인원 제한 없이 전원 추가 (host는 id='1'로 이미 존재하므로 제외)
+    sorted
+      .filter((a) => !myEmail || a.email.toLowerCase() !== myEmail)
+      .forEach((attendee, i) => {
+        const name     = attendee.email.split('@')[0]  // brad.and (점 포함)
+        const colorIdx = (i + 1) % COLORS.length
+        addParticipant({ id: `cal-${ev.id}-${i}`, name, ...COLORS[colorIdx] })
+      })
     setShowCalPicker(false)
   }
 
