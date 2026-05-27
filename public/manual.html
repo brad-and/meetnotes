@@ -902,7 +902,9 @@
           <li style="font-size:13px;color:var(--text-secondary);display:flex;gap:8px"><span style="color:var(--green)">▸</span>회의 제목 입력 (필수)</li>
           <li style="font-size:13px;color:var(--text-secondary);display:flex;gap:8px"><span style="color:var(--green)">▸</span>회의 유형: 대면(마이크) / 온라인(파일 업로드)</li>
           <li style="font-size:13px;color:var(--text-secondary);display:flex;gap:8px"><span style="color:var(--green)">▸</span>참여자 등록 — AI 발언자 구분 정확도 향상</li>
-          <li style="font-size:13px;color:var(--text-secondary);display:flex;gap:8px"><span style="color:var(--green)">▸</span>📅 Google Calendar 연동 — 일정 원클릭 선택</li>
+          <li style="font-size:13px;color:var(--text-secondary);display:flex;gap:8px"><span style="color:var(--green)">▸</span>🆔 진행자(나) 이름 자동 추출 — <code>hostEmail</code> 로컬파트 사용 (점 포함, <code>brad.and</code> 형식)</li>
+          <li style="font-size:13px;color:var(--text-secondary);display:flex;gap:8px"><span style="color:var(--green)">▸</span>📅 Google Calendar 연동 — 일정 원클릭 선택, 참석자 <strong>전원 자동 등록</strong> (8명 제한 없음)</li>
+          <li style="font-size:13px;color:var(--text-secondary);display:flex;gap:8px"><span style="color:var(--green)">▸</span>캘린더 참석자 필터 — 수락(accepted)·미정(tentative)만 등록, 거절·미응답 제외</li>
           <li style="font-size:13px;color:var(--text-secondary);display:flex;gap:8px"><span style="color:var(--green)">▸</span>💬 Slack Webhook 연동 설정</li>
           <li style="font-size:13px;color:var(--text-secondary);display:flex;gap:8px"><span style="color:var(--green)">▸</span>AI 분석 옵션 토글 (발언자 구분, 다음 스텝 등)</li>
         </ul>
@@ -954,6 +956,7 @@
           <li style="font-size:13px;color:var(--text-secondary);display:flex;gap:8px"><span style="color:var(--red)">▸</span>발언 통계 패널 (발언자별 단어 수, 점유율)</li>
           <li style="font-size:13px;color:var(--text-secondary);display:flex;gap:8px"><span style="color:var(--red)">▸</span>일시정지 / 재개 / 종료</li>
           <li style="font-size:13px;color:var(--text-secondary);display:flex;gap:8px"><span style="color:var(--red)">▸</span>종료 시 자동으로 AI 분석 시작</li>
+          <li style="font-size:13px;color:var(--text-secondary);display:flex;gap:8px"><span style="color:var(--red)">▸</span>⚠️ <strong>AI 분석 실패 시 데이터 보존</strong> — 트랜스크립트·참여자 정보를 fallback 회의록으로 저장, ReviewScreen에서 🔄 재분석 가능</li>
         </ul>
       </div>
       <div class="mockup">
@@ -1019,8 +1022,8 @@
           <div style="background:var(--bg-elevated);border-radius:6px;padding:10px 14px;display:flex;gap:10px;align-items:flex-start">
             <span style="color:var(--blue);font-size:13px;flex-shrink:0">📄</span>
             <div>
-              <div style="font-size:12px;font-weight:700;margin-bottom:2px">detail — 전체 요약</div>
-              <div style="font-size:11px;color:var(--text-secondary)">회의 내용을 3-5문장으로 서술한 요약</div>
+              <div style="font-size:12px;font-weight:700;margin-bottom:2px">detail — 상세 회의록</div>
+              <div style="font-size:11px;color:var(--text-secondary)">주제별 섹션으로 구분된 전체 회의 내용 (Slack full 포맷에 포함)</div>
             </div>
           </div>
           <div style="background:var(--bg-elevated);border-radius:6px;padding:10px 14px;display:flex;gap:10px;align-items:flex-start">
@@ -1058,6 +1061,9 @@
           <span class="badge green">💬 Slack 전송</span>
           <span class="badge purple">📁 저장 완료</span>
         </div>
+        <div style="margin-top:10px;background:#2a1a1a;border:1px solid var(--red);border-radius:6px;padding:10px 12px;font-size:12px;color:var(--red)">
+          ⚠️ <strong>AI 분석 실패 배너</strong> — 오류 발생 시 빨간 배너로 에러 메시지 표시. <strong style="color:#fff">🔄 AI 재분석</strong> 버튼 클릭 시 <code>/api/analyze</code> 재호출 → 성공 시 초록 배너로 전환, DB 자동 업데이트
+        </div>
       </div>
       <div class="mockup">
         <div class="mockup-bar">
@@ -1070,8 +1076,8 @@
           <div style="font-size:11px;font-weight:700;color:var(--text-secondary);text-transform:uppercase;letter-spacing:1.4px;margin-bottom:8px">Q3 기능 우선순위 조정</div>
           <!-- detail -->
           <div style="background:var(--bg-elevated);border-radius:6px;padding:10px 12px;margin-bottom:7px">
-            <div style="font-size:9px;font-weight:700;color:var(--blue);text-transform:uppercase;letter-spacing:1.5px;margin-bottom:5px">📄 전체 요약</div>
-            <div style="font-size:11px;color:#cbcbcb;line-height:1.6">이번 회의에서 Q3 스프린트 기능 우선순위를 논의했습니다. A 기능을 먼저 진행하고 B 기능은 다음 스프린트로 이동하기로 결정했습니다.</div>
+            <div style="font-size:9px;font-weight:700;color:var(--blue);text-transform:uppercase;letter-spacing:1.5px;margin-bottom:5px">📄 상세 회의록</div>
+            <div style="font-size:11px;color:#cbcbcb;line-height:1.6">**[기능 우선순위 결정]**<br>A 기능을 이번 스프린트 최우선으로 진행하기로 합의. B 기능은 다음 스프린트로 이동 결정.<br>**[리소스 배분]**<br>Terry가 설계 문서 작성, Daniel이 백로그 이동을 담당.</div>
           </div>
           <!-- core -->
           <div style="background:var(--bg-elevated);border-radius:6px;padding:10px 12px;margin-bottom:7px">
@@ -1104,12 +1110,33 @@
       <div>
         <p style="margin-bottom:10px">Incoming Webhook을 이용해 회의록을 Slack 채널로 전송하는 화면입니다.</p>
         <ul style="list-style:none;display:flex;flex-direction:column;gap:6px;margin-top:10px">
-          <li style="font-size:13px;color:var(--text-secondary);display:flex;gap:8px"><span style="color:var(--orange)">▸</span>전송 채널 선택</li>
-          <li style="font-size:13px;color:var(--text-secondary);display:flex;gap:8px"><span style="color:var(--orange)">▸</span>포맷: 전체 / 간단 / 액션만</li>
+          <li style="font-size:13px;color:var(--text-secondary);display:flex;gap:8px"><span style="color:var(--orange)">▸</span>전송 채널 선택 (채널명 <code>#</code> 유무 관계없이 정상 표시)</li>
+          <li style="font-size:13px;color:var(--text-secondary);display:flex;gap:8px"><span style="color:var(--orange)">▸</span>포맷: <strong>전체</strong>(상세+결정+액션+다음스텝) / <strong>간단</strong>(결정+액션) / <strong>액션만</strong></li>
           <li style="font-size:13px;color:var(--text-secondary);display:flex;gap:8px"><span style="color:var(--orange)">▸</span>전송 옵션 토글 (멘션, 트랜스크립트 첨부 등)</li>
-          <li style="font-size:13px;color:var(--text-secondary);display:flex;gap:8px"><span style="color:var(--orange)">▸</span>Slack 다크모드 UI 미리보기</li>
+          <li style="font-size:13px;color:var(--text-secondary);display:flex;gap:8px"><span style="color:var(--orange)">▸</span>Slack 다크모드 UI 미리보기 (포맷별 즉시 반영)</li>
           <li style="font-size:13px;color:var(--text-secondary);display:flex;gap:8px"><span style="color:var(--orange)">▸</span>전송 성공 시 히스토리에 Slack 전송 표시</li>
         </ul>
+        <div style="margin-top:12px">
+          <div style="font-size:11px;font-weight:700;color:var(--text-secondary);text-transform:uppercase;letter-spacing:1.2px;margin-bottom:6px">포맷별 Slack 포함 항목</div>
+          <table style="width:100%;border-collapse:collapse;font-size:11px">
+            <tr style="border-bottom:1px solid var(--border)">
+              <th style="text-align:left;padding:5px 8px;color:var(--text-muted)">포맷</th>
+              <th style="text-align:left;padding:5px 8px;color:var(--text-muted)">포함 내용</th>
+            </tr>
+            <tr style="border-bottom:1px solid var(--border)">
+              <td style="padding:5px 8px;color:var(--orange);font-weight:700">전체 (full)</td>
+              <td style="padding:5px 8px;color:var(--text-secondary)">📄 상세 회의록 + ✅ 결정사항 + ☐ 액션 아이템 + 🚀 다음 스텝</td>
+            </tr>
+            <tr style="border-bottom:1px solid var(--border)">
+              <td style="padding:5px 8px;color:var(--blue);font-weight:700">간단 (brief)</td>
+              <td style="padding:5px 8px;color:var(--text-secondary)">✅ 결정사항 + ☐ 액션 아이템</td>
+            </tr>
+            <tr>
+              <td style="padding:5px 8px;color:var(--green);font-weight:700">액션만 (actions)</td>
+              <td style="padding:5px 8px;color:var(--text-secondary)">☐ 액션 아이템만</td>
+            </tr>
+          </table>
+        </div>
       </div>
       <div class="mockup">
         <div class="mockup-bar">
@@ -1147,7 +1174,14 @@
       <span class="badge purple">SCREEN 5</span>
       <h3 style="margin:0">히스토리 (HistoryScreen)</h3>
     </div>
-    <p>완료된 회의록 목록 · 전체 내용 펼치기 · Slack 전송 여부 표시 · 아카이브 처리. Supabase에 영구 저장.</p>
+    <p style="margin-bottom:10px">완료된 회의록 목록 · 전체 내용 펼치기 · Slack 전송 여부 표시 · 아카이브 처리. Supabase에 영구 저장.</p>
+    <ul style="list-style:none;display:flex;flex-direction:column;gap:6px">
+      <li style="font-size:13px;color:var(--text-secondary);display:flex;gap:8px"><span style="color:var(--purple)">▸</span>회의록 항목 클릭 → 상세 내용 펼치기/접기</li>
+      <li style="font-size:13px;color:var(--text-secondary);display:flex;gap:8px"><span style="color:var(--purple)">▸</span>Slack 전송 완료 여부 배지 표시 (✅ / 미전송)</li>
+      <li style="font-size:13px;color:var(--text-secondary);display:flex;gap:8px"><span style="color:var(--purple)">▸</span>아카이브 토글 — 목록에서 숨기기 / 복원</li>
+      <li style="font-size:13px;color:var(--text-secondary);display:flex;gap:8px"><span style="color:var(--purple)">▸</span>🗑️ <strong>개별 삭제 버튼</strong> — Supabase DB에서 즉시 삭제 (API: <code>DELETE /api/meetings/:id</code>)</li>
+      <li style="font-size:13px;color:var(--text-secondary);display:flex;gap:8px"><span style="color:var(--purple)">▸</span>전체 삭제 버튼 (일괄 삭제)</li>
+    </ul>
   </div>
 </section>
 
@@ -1309,7 +1343,7 @@ mediaRecorder.<span class="fn">ondataavailable</span> = (e) => {
       <span class="badge blue">AI</span>
       <h3 style="margin:0">AI 회의록 작성 — Gemini 2.5 Flash ★ 핵심</h3>
     </div>
-    <p style="margin-bottom:14px">회의 종료 후 전사된 트랜스크립트를 Gemini 2.5 Flash에 전달해 구조화된 JSON 회의록을 생성합니다. 응답을 JSON 모드로 강제해 파싱 실패를 방지합니다.</p>
+    <p style="margin-bottom:14px">회의 종료 후 전사된 트랜스크립트를 Gemini 2.5 Flash에 전달해 구조화된 JSON 회의록을 생성합니다. 응답을 JSON 모드로 강제하고, 3-레이어 파싱 전략으로 불완전한 JSON도 복구합니다.</p>
     <div class="code-label">app/api/analyze/route.ts — AI 프롬프트</div>
     <pre><span class="kw">const</span> prompt = <span class="st">`당신은 회의록 전문 AI 작성자입니다.
 회의 제목: ${title}
@@ -1318,7 +1352,7 @@ mediaRecorder.<span class="fn">ondataavailable</span> = (e) => {
 
 다음 JSON 형식으로만 응답해주세요:
 {
-  "detail":    "전체 요약 3-5문장",
+  "detail":    "[주제명] 섹션별 상세 회의록 (마크다운 섹션 **[제목]** 형식)",
   "core":      "핵심 결정사항 번호 목록",
   "keywords":  ["키워드1", ..., "키워드8"],
   "actions": [{
@@ -1336,12 +1370,38 @@ mediaRecorder.<span class="fn">ondataavailable</span> = (e) => {
   model: <span class="st">'gemini-2.5-flash'</span>,
   generationConfig: {
     responseMimeType: <span class="st">'application/json'</span>, <span class="cm">// JSON 모드 강제</span>
-    maxOutputTokens: <span class="nm">8192</span>,
+    maxOutputTokens: <span class="nm">16384</span>,             <span class="cm">// 긴 회의도 충분히 처리</span>
   }
 })</pre>
+
+    <div class="code-label">app/api/analyze/route.ts — 3-레이어 JSON 파싱 전략</div>
+    <pre><span class="cm">// Layer 1: sanitizeJson (제어문자·잘못된 이스케이프 수정)</span>
+<span class="kw">let</span> raw: <span class="tp">unknown</span>
+<span class="kw">try</span> {
+  raw = <span class="tp">JSON</span>.<span class="fn">parse</span>(<span class="fn">sanitizeJson</span>(match[<span class="nm">0</span>]))
+} <span class="kw">catch</span> (parseErr1) {
+  <span class="cm">// Layer 2: jsonrepair (이스케이프 안 된 따옴표, trailing comma 등)</span>
+  <span class="kw">try</span> {
+    raw = <span class="tp">JSON</span>.<span class="fn">parse</span>(<span class="fn">jsonrepair</span>(match[<span class="nm">0</span>]))
+  } <span class="kw">catch</span> (parseErr2) {
+    <span class="cm">// Layer 3: 파싱 완전 실패 → 500 에러 반환</span>
+    <span class="kw">return</span> NextResponse.<span class="fn">json</span>(
+      { error: <span class="st">`JSON 파싱 실패: ${parseErr2}`</span> },
+      { status: <span class="nm">500</span> }
+    )
+  }
+}
+
+<span class="cm">// sanitizeJson: 제어문자 이스케이프 + 잘못된 이스케이프 시퀀스 수정</span>
+<span class="cm">// jsonrepair: npm 패키지 — "He said "hello"" 같은 unescaped 따옴표 복구</span></pre>
+
+    <div class="callout orange" style="margin-bottom:14px">
+      <div class="callout-icon">🔧</div>
+      <div><strong>jsonrepair 도입 배경:</strong> Gemini가 JSON 문자열 내부에 이스케이프 없이 <code>"</code>를 삽입하는 경우가 있어 <code>Expected ',' or '}'</code> 파싱 오류 발생. <code>sanitizeJson</code> state machine 처리 후에도 실패하면 <code>jsonrepair</code>가 2차로 복구. 설치: <code>npm install jsonrepair</code></div>
+    </div>
     <div class="callout green" style="margin-bottom:0">
       <div class="callout-icon">✨</div>
-      <div><strong>AI 응답 구조:</strong> <code>detail</code>(전체 요약) · <code>core</code>(결정사항) · <code>keywords</code>(8개) · <code>actions</code>(담당자+기한+우선순위) · <code>nextSteps</code>(AI 제안 3개). ReviewScreen에서 각 항목을 직접 편집할 수 있습니다.</div>
+      <div><strong>AI 응답 구조:</strong> <code>detail</code>(섹션별 상세 회의록) · <code>core</code>(결정사항) · <code>keywords</code>(8개) · <code>actions</code>(담당자+기한+우선순위) · <code>nextSteps</code>(AI 제안 3개). ReviewScreen에서 각 항목을 직접 편집할 수 있으며, 분석 실패 시 재분석 버튼으로 재시도 가능합니다.</div>
     </div>
   </div>
 
@@ -1360,20 +1420,32 @@ mediaRecorder.<span class="fn">ondataavailable</span> = (e) => {
   <span class="cm">// 회의 메타</span>
   title: <span class="tp">string</span>; meetingType: <span class="st">'face'</span> | <span class="st">'online'</span>
   participants: <span class="tp">Participant</span>[]
+  updateParticipantName: (id: <span class="tp">string</span>, name: <span class="tp">string</span>) =&gt; <span class="tp">void</span>  <span class="cm">// 참여자 이름 수정</span>
 
   <span class="cm">// 녹음·전사</span>
   utterances: <span class="tp">Utterance</span>[]    <span class="cm">// 발언 목록</span>
-  speakerMap: <span class="tp">Record</span>&lt;<span class="tp">string</span>, <span class="tp">string</span>&gt; <span class="cm">// Speaker 0 → "Terry"</span>
+  speakerMap: <span class="tp">Record</span>&lt;<span class="tp">string</span>, <span class="tp">string</span>&gt; <span class="cm">// Speaker 0 → "brad.and" (hostEmail 기반 자동 설정)</span>
   isRecording: <span class="tp">boolean</span>; isPaused: <span class="tp">boolean</span>
   elapsedSeconds: <span class="tp">number</span>
 
   <span class="cm">// AI 결과</span>
   minutes: <span class="tp">MeetingMinutes</span> | <span class="tp">null</span>
   isAnalyzing: <span class="tp">boolean</span>
+  analysisError: <span class="tp">string</span> | <span class="tp">null</span>      <span class="cm">// AI 분석 실패 메시지 (null = 성공)</span>
+  setAnalysisError: (e: <span class="tp">string</span> | <span class="tp">null</span>) =&gt; <span class="tp">void</span>
 
   <span class="cm">// 히스토리</span>
   meetingHistory: <span class="tp">MeetingRecord</span>[]
-}</pre>
+}
+
+<span class="cm">// SetupScreen: 앱 로드 시 hostEmail → speakerMap['Speaker 0'] 자동 설정</span>
+<span class="cm">// 예: "brad.and@kakaomobility.com" → setSpeakerName('Speaker 0', 'brad.and')</span>
+<span class="cm">//     + updateParticipantName('1', 'brad.and')</span>
+
+<span class="cm">// RecordingScreen: AI 분석 실패 시 fallback 처리</span>
+<span class="cm">// setMinutes(fallbackMinutes)  → detail에 원문 트랜스크립트 보존</span>
+<span class="cm">// setAnalysisError(errMsg)     → ReviewScreen에 에러 배너 표시</span>
+<span class="cm">// addToHistory(...)            → DB에도 fallback 데이터 저장</span></pre>
   </div>
 
   <!-- Slack -->
@@ -1383,24 +1455,51 @@ mediaRecorder.<span class="fn">ondataavailable</span> = (e) => {
       <h3 style="margin:0">Slack 전송 — Incoming Webhook</h3>
     </div>
     <p style="margin-bottom:12px">Slack Block Kit을 이용해 회의록을 구조화된 메시지로 전송합니다. Webhook URL은 <code>data/slack-settings.json</code>에 저장됩니다.</p>
-    <div class="code-label">app/api/slack/route.ts — Block Kit 메시지 구성</div>
-    <pre><span class="cm">// 회의록 → Slack Block Kit 변환</span>
-<span class="kw">const</span> blocks = [
+    <div class="code-label">app/api/slack/route.ts — pushTextBlocks 헬퍼 (3000자 제한 분할)</div>
+    <pre><span class="cm">// Slack section 블록은 3000자 제한 → 긴 텍스트를 2900자씩 분할</span>
+<span class="kw">function</span> <span class="fn">pushTextBlocks</span>(blocks: <span class="tp">unknown</span>[], text: <span class="tp">string</span>) {
+  <span class="kw">const</span> LIMIT = <span class="nm">2900</span>
+  <span class="kw">for</span> (<span class="kw">let</span> i = <span class="nm">0</span>; i &lt; text.length; i += LIMIT) {
+    blocks.<span class="fn">push</span>({
+      type: <span class="st">'section'</span>,
+      text: { type: <span class="st">'mrkdwn'</span>, text: text.<span class="fn">slice</span>(i, i + LIMIT) }
+    })
+  }
+}</pre>
+
+    <div class="code-label">app/api/slack/route.ts — buildBlocks 포맷별 구성</div>
+    <pre><span class="cm">// 공통 헤더 (모든 포맷)</span>
+blocks.<span class="fn">push</span>(
   { type: <span class="st">'header'</span>, text: { type: <span class="st">'plain_text'</span>, text: <span class="st">`📋 [회의록] ${title}`</span> }},
   { type: <span class="st">'context'</span>, elements: [{ type: <span class="st">'mrkdwn'</span>,
-    text: <span class="st">`📅 ${date} · ⏱ ${duration} · 👥 ${participants}`</span> }]},
-  { type: <span class="st">'divider'</span> },
-  { type: <span class="st">'section'</span>, text: { type: <span class="st">'mrkdwn'</span>,
-    text: <span class="st">`*결정사항*\n${coreLines}`</span> }},
-  { type: <span class="st">'section'</span>, text: { type: <span class="st">'mrkdwn'</span>,
-    text: <span class="st">`*액션 아이템*\n${actionLines}`</span> }},
-  <span class="cm">// nextSteps (format==='full'일 때만)</span>
-]
+    text: <span class="st">`📅 ${date} · ⏱ ${duration}분 · 👥 ${participants}`</span> }]},
+  { type: <span class="st">'divider'</span> }
+)
+
+<span class="kw">if</span> (format === <span class="st">'full'</span>) {
+  <span class="cm">// ① 상세 회의 내용 (detail) — pushTextBlocks로 3000자 분할</span>
+  blocks.<span class="fn">push</span>({ type: <span class="st">'section'</span>,
+    text: { type: <span class="st">'mrkdwn'</span>, text: <span class="st">'*📄 전체 회의 내용*'</span> }})
+  <span class="fn">pushTextBlocks</span>(blocks, minutes.detail)
+  blocks.<span class="fn">push</span>({ type: <span class="st">'divider'</span> })
+  <span class="cm">// ② 결정사항, 액션, 다음스텝</span>
+  <span class="fn">pushTextBlocks</span>(blocks, <span class="st">`*✅ 결정사항*\n${coreLines}`</span>)
+  <span class="kw">if</span> (actions.length) <span class="fn">pushTextBlocks</span>(blocks, <span class="st">`*☐ 액션 아이템*\n${actionLines}`</span>)
+  <span class="kw">if</span> (nextSteps.length) <span class="fn">pushTextBlocks</span>(blocks, <span class="st">`*🚀 다음 스텝*\n${nextStepLines}`</span>)
+
+} <span class="kw">else if</span> (format === <span class="st">'brief'</span>) {
+  <span class="fn">pushTextBlocks</span>(blocks, <span class="st">`*✅ 결정사항*\n${coreLines}`</span>)
+  <span class="kw">if</span> (actions.length) <span class="fn">pushTextBlocks</span>(blocks, <span class="st">`*☐ 액션 아이템*\n${actionLines}`</span>)
+
+} <span class="kw">else</span> { <span class="cm">// 'actions'</span>
+  <span class="kw">if</span> (actions.length) <span class="fn">pushTextBlocks</span>(blocks, <span class="st">`*☐ 액션 아이템*\n${actionLines}`</span>)
+}
+
 <span class="cm">// Webhook으로 전송</span>
 <span class="kw">await</span> <span class="fn">fetch</span>(webhookUrl, {
   method: <span class="st">'POST'</span>,
   headers: { <span class="st">'Content-Type'</span>: <span class="st">'application/json'</span> },
-  body: <span class="tp">JSON</span>.<span class="fn">stringify</span>({ text, blocks })
+  body: <span class="tp">JSON</span>.<span class="fn">stringify</span>({ text: <span class="st">`[회의록] ${title}`</span>, blocks })
 })</pre>
   </div>
 
@@ -1468,10 +1567,14 @@ mediaRecorder.<span class="fn">ondataavailable</span> = (e) => {
       <ul class="checklist">
         <li>종료 후 "AI 분석 중..." 스피너 표시</li>
         <li>detail / core / keywords / actions / nextSteps 모두 생성됨</li>
+        <li>detail이 섹션별 상세 회의록으로 생성됨 (3-5문장 요약 아님)</li>
         <li>actions에 담당자·기한·우선순위 포함됨</li>
         <li>nextSteps 3개 제안됨</li>
         <li>각 항목 직접 편집 후 저장 시 반영됨</li>
+        <li>AI 분석 실패 시 에러 배너 + 🔄 재분석 버튼 표시</li>
+        <li>재분석 성공 시 회의록 업데이트 + DB 자동 반영 (PATCH)</li>
         <li class="warn">트랜스크립트가 짧으면 AI 결과가 간략할 수 있음</li>
+        <li class="warn">AI 분석 실패 시에도 트랜스크립트는 detail 필드에 보존됨</li>
       </ul>
     </div>
     <div class="card">
@@ -1479,7 +1582,10 @@ mediaRecorder.<span class="fn">ondataavailable</span> = (e) => {
       <ul class="checklist">
         <li>Webhook URL 설정 후 연결됨 표시</li>
         <li>포맷(전체/간단/액션만) 별 미리보기 변경</li>
+        <li>전체 포맷 미리보기에 상세 회의 내용(detail) 표시됨</li>
+        <li>채널명 첫 글자 정상 표시 (# 유무 관계없이)</li>
         <li>전송 버튼 클릭 후 Slack 채널에 메시지 수신</li>
+        <li>전체 포맷 — 상세 회의 내용 → 결정사항 → 액션 순서로 수신</li>
         <li>히스토리에 Slack 전송 완료 표시</li>
         <li class="warn">Webhook URL이 만료되면 재등록 필요</li>
       </ul>
@@ -1491,6 +1597,7 @@ mediaRecorder.<span class="fn">ondataavailable</span> = (e) => {
         <li>Slack 텍스트 복사 — 클립보드 복사 성공</li>
         <li>히스토리 목록에 회의 기록 표시</li>
         <li>히스토리 항목 클릭 시 전체 내용 펼쳐짐</li>
+        <li>🗑️ 개별 삭제 버튼 — 항목 즉시 삭제 + DB 반영</li>
         <li>아카이브 처리 후 목록에서 제거됨</li>
       </ul>
     </div>
@@ -1514,27 +1621,51 @@ mediaRecorder.<span class="fn">ondataavailable</span> = (e) => {
     </tr>
     <tr>
       <td style="color:var(--text-muted);white-space:nowrap">#3</td>
-      <td>AI JSON 파싱 실패 오류</td>
-      <td style="color:var(--text-secondary)">Gemini가 JSON 외 텍스트를 포함해 응답</td>
-      <td style="color:var(--green)"><code>responseMimeType: 'application/json'</code> 설정으로 JSON 모드 강제. 정규식으로 JSON 추출 추가</td>
+      <td>AI JSON 파싱 실패 오류<br><code style="font-size:10px">Expected ',' or '}'</code></td>
+      <td style="color:var(--text-secondary)">Gemini가 JSON 문자열 내에 이스케이프 없이 <code>"</code>를 삽입하거나 제어문자 포함</td>
+      <td style="color:var(--green)">3-레이어 파싱: ① <code>sanitizeJson</code> state machine → ② <code>jsonrepair</code> npm → ③ 500 에러. 트랜스크립트는 fallback으로 항상 보존되며 ReviewScreen에서 🔄 재분석 가능</td>
     </tr>
     <tr>
       <td style="color:var(--text-muted);white-space:nowrap">#4</td>
+      <td>Slack 채널명 첫 글자 잘림</td>
+      <td style="color:var(--text-secondary)">채널명이 <code>#</code> 없이 저장된 경우 <code>.slice(1)</code> 로직이 첫 글자를 제거</td>
+      <td style="color:var(--green)"><code>startsWith('#')</code> 체크 후 <code>slice(1)</code> 여부 결정. 현재 코드에서 수정 완료</td>
+    </tr>
+    <tr>
+      <td style="color:var(--text-muted);white-space:nowrap">#5</td>
+      <td>Slack 전송 시 상세 내용 없음</td>
+      <td style="color:var(--text-secondary)">이전 버전 — <code>brief</code> 포맷 기본값 또는 <code>detail</code> 미포함 buildBlocks</td>
+      <td style="color:var(--green)"><code>full</code> 포맷 선택 시 <code>detail</code> 섹션이 Slack 메시지 첫 번째 섹션으로 포함됨 (pushTextBlocks로 3000자 분할)</td>
+    </tr>
+    <tr>
+      <td style="color:var(--text-muted);white-space:nowrap">#6</td>
       <td>Slack 전송 실패</td>
       <td style="color:var(--text-secondary)">Webhook URL 만료 또는 잘못된 URL</td>
       <td style="color:var(--green)">api.slack.com에서 새 Webhook URL 생성 후 ⚙️에서 재등록</td>
     </tr>
     <tr>
-      <td style="color:var(--text-muted);white-space:nowrap">#5</td>
+      <td style="color:var(--text-muted);white-space:nowrap">#7</td>
       <td>파일 전사가 너무 느림</td>
       <td style="color:var(--text-secondary)">대용량 파일(수백 MB) 업로드 시 시간 초과</td>
       <td style="color:var(--green)">오디오만 추출해 MP3로 변환 후 업로드. 일반적으로 1시간 회의 = 수십 MB</td>
     </tr>
     <tr>
-      <td style="color:var(--text-muted);white-space:nowrap">#6</td>
+      <td style="color:var(--text-muted);white-space:nowrap">#8</td>
       <td>발언자가 전부 Speaker 0</td>
       <td style="color:var(--text-secondary)">발화 간 묵음 구간이 짧아 화자 분리 미작동</td>
       <td style="color:var(--green)">Deepgram diarize 파라미터는 정상. 발언 전환 시 짧은 침묵이 필요. 다화자 녹음 환경 개선 권장</td>
+    </tr>
+    <tr>
+      <td style="color:var(--text-muted);white-space:nowrap">#9</td>
+      <td>진행자(나)가 "Speaker 0"으로 표시</td>
+      <td style="color:var(--text-secondary)"><code>hostEmail</code>이 설정되지 않거나 앱 로드 시 <code>speakerMap</code> 미초기화</td>
+      <td style="color:var(--green)"><code>data/calendar-settings.json</code>에 <code>hostEmail</code> 입력 확인. 앱 로드 시 자동으로 <code>speakerMap['Speaker 0']</code>에 이메일 로컬파트(점 포함) 설정됨</td>
+    </tr>
+    <tr>
+      <td style="color:var(--text-muted);white-space:nowrap">#10</td>
+      <td>캘린더 참석자가 8명으로 제한됨</td>
+      <td style="color:var(--text-secondary)">구버전 코드에 <code>slice(0, 8)</code> 하드코딩</td>
+      <td style="color:var(--green)">현재 버전에서 제한 제거. 수락(accepted)·미정(tentative) 참석자 전원 자동 등록</td>
     </tr>
   </table>
   </div>
@@ -1564,7 +1695,7 @@ mediaRecorder.<span class="fn">ondataavailable</span> = (e) => {
 
 <hr>
 <div style="text-align:center;padding:28px 0;color:var(--text-muted);font-size:12px">
-  MeetNotes AI 회의록 서비스 개발 매뉴얼 · 2026년 5월
+  MeetNotes AI 회의록 서비스 개발 매뉴얼 · 2026년 5월 (최종 업데이트: 2026.05.27)
 </div>
 
 </div><!-- /.page -->
