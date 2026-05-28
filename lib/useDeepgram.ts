@@ -79,12 +79,12 @@ export function useDeepgram() {
 
     try {
       // ── 1. 향상된 오디오 제약 ───────────────────────────────────────────
+      // sampleRate는 지정하지 않음 — 브라우저 기본값 사용 (호환성 우선)
       const audioConstraints: MediaTrackConstraints = {
         echoCancellation: true,    // 에코 제거 (스피커 → 마이크 피드백 방지)
         noiseSuppression: true,    // 배경 소음 억제 (키보드, 에어컨 등)
         autoGainControl: true,     // 브라우저 내장 자동 게인 (조용한 환경 보정)
         channelCount: 1,           // 모노 (파일 크기 절반, Deepgram 권장)
-        sampleRate: { ideal: 16000 },  // Deepgram 최적 샘플레이트
       }
       if (deviceIdRef.current) {
         audioConstraints.deviceId = { exact: deviceIdRef.current }
@@ -102,6 +102,13 @@ export function useDeepgram() {
       // source → gainNode → compressor → analyser → destination
       const audioCtx = new AudioContext()
       audioCtxRef.current = audioCtx
+
+      // ★ 핵심: useEffect 내부에서 생성된 AudioContext는 Chrome에서
+      //   suspended 상태로 시작됨. resume()을 명시적으로 호출해야 함.
+      //   suspended 상태에서는 음성이 흐르지 않아 Deepgram이 무음을 수신.
+      if (audioCtx.state === 'suspended') {
+        await audioCtx.resume()
+      }
 
       const source = audioCtx.createMediaStreamSource(stream)
 
@@ -132,8 +139,16 @@ export function useDeepgram() {
       compressor.connect(analyser)
       analyser.connect(destination)
 
-      // 처리된 스트림을 WebSocket 전송과 녹음에 사용
+      // 처리된 스트림 유효성 확인 후 사용
       const processedStream = destination.stream
+      const processedTrack  = processedStream.getAudioTracks()[0]
+      // processedStream이 유효하지 않으면 원본 stream을 fallback으로 사용
+      const recordingStream = (processedTrack && processedTrack.readyState === 'live')
+        ? processedStream
+        : stream
+      if (recordingStream === stream) {
+        console.warn('[useDeepgram] processedStream 트랙 없음 — 원본 stream fallback 사용')
+      }
 
       // ── 3. Deepgram 토큰 발급 ────────────────────────────────────────
       const tokenRes = await fetch('/api/transcribe/token')
@@ -159,19 +174,27 @@ export function useDeepgram() {
 
       ws.onopen = () => {
         if (gen !== recordingGenRef.current) { ws.close(); return }
-        audioChunksRef.current  = []
-        pendingIdRef.current    = null
+        audioChunksRef.current    = []
+        pendingIdRef.current      = null
         utteranceEndedRef.current = false
         const mimeType = pickMimeType()
         mimeTypeRef.current = mimeType
-        // 처리된 스트림(gain+compressor)으로 MediaRecorder 생성
-        const mediaRecorder = new MediaRecorder(processedStream, { mimeType })
+        // gain+compressor 처리된 스트림 사용 (fallback 포함)
+        const mediaRecorder = new MediaRecorder(recordingStream, { mimeType })
         mediaRecorderRef.current = mediaRecorder
+        mediaRecorder.onerror = (e) => console.error('[MediaRecorder] error:', e)
         mediaRecorder.ondataavailable = (e) => {
           if (e.data.size > 0) audioChunksRef.current.push(e.data)
           if (ws.readyState === WebSocket.OPEN) ws.send(e.data)
         }
         mediaRecorder.start(250)
+      }
+
+      ws.onerror = (e) => console.error('[WebSocket] error:', e)
+      ws.onclose = (e) => {
+        if (e.code !== 1000 && e.code !== 1001) {
+          console.warn('[WebSocket] 비정상 종료:', e.code, e.reason)
+        }
       }
 
       ws.onmessage = (event) => {
@@ -264,8 +287,12 @@ export function useDeepgram() {
     }
   }, [setPaused])
 
-  const resumeRecording = useCallback(() => {
+  const resumeRecording = useCallback(async () => {
     if (mediaRecorderRef.current?.state === 'paused') {
+      // 일시정지 중 AudioContext가 자동 suspend 됐을 경우 재개
+      if (audioCtxRef.current?.state === 'suspended') {
+        await audioCtxRef.current.resume()
+      }
       mediaRecorderRef.current.resume()
       const currentSec = useMeetingStore.getState().elapsedSeconds
       let sec = currentSec
