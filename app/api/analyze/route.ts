@@ -1,22 +1,104 @@
 import { NextRequest, NextResponse } from 'next/server'
-import { GoogleGenerativeAI } from '@google/generative-ai'
+import { GoogleGenerativeAI, Part } from '@google/generative-ai'
 import { jsonrepair } from 'jsonrepair'
 
 const genAI = new GoogleGenerativeAI(process.env.GOOGLE_AI_API_KEY ?? '')
 
+// 503 과부하 시 재시도 + 모델 폴백
+const MODEL_FALLBACK = ['gemini-2.5-flash', 'gemini-2.0-flash', 'gemini-1.5-flash']
+
+async function generateWithFallback(parts: (string | Part)[]): Promise<string> {
+  for (const modelName of MODEL_FALLBACK) {
+    const model = genAI.getGenerativeModel({
+      model: modelName,
+      generationConfig: { responseMimeType: 'application/json', maxOutputTokens: 16384 },
+    })
+    for (let attempt = 0; attempt < 2; attempt++) {
+      try {
+        const result = await model.generateContent(parts)
+        return result.response.text()
+      } catch (err) {
+        const msg = err instanceof Error ? err.message : String(err)
+        const retryable = msg.includes('503') || msg.includes('high demand') || msg.includes('temporarily')
+        if (!retryable) throw err
+        if (attempt === 0) await new Promise((r) => setTimeout(r, 2000))
+      }
+    }
+  }
+  throw new Error('모든 Gemini 모델에서 503 오류가 발생했습니다. 잠시 후 다시 시도해주세요.')
+}
+
 export async function POST(req: NextRequest) {
   try {
-    const { transcript, participants, title } = await req.json()
+    const contentType = req.headers.get('content-type') ?? ''
+    let transcript = ''
+    let participants: string[] = []
+    let title = ''
+    let audioBase64 = ''
+    let audioMimeType = ''
 
-    const prompt = `당신은 회의록 전문 AI 작성자입니다. 아래 회의 트랜스크립트를 빠짐없이 분석해 상세한 공식 회의록을 작성해주세요.
+    if (contentType.includes('multipart/form-data')) {
+      const formData = await req.formData()
+      const audioFile = formData.get('audio') as File | null
+      participants = JSON.parse((formData.get('participants') as string) ?? '[]')
+      title = (formData.get('title') as string) ?? ''
+      if (audioFile && audioFile.size > 0) {
+        audioBase64 = Buffer.from(await audioFile.arrayBuffer()).toString('base64')
+        audioMimeType = audioFile.type || 'audio/webm'
+      }
+    } else {
+      const body = await req.json()
+      transcript = body.transcript ?? ''
+      participants = body.participants ?? []
+      title = body.title ?? ''
+    }
+
+    // Build Gemini content parts
+    const parts: (string | Part)[] = []
+    if (audioBase64) {
+      parts.push({ inlineData: { mimeType: audioMimeType, data: audioBase64 } })
+    }
+
+    const transcriptSection = audioBase64
+      ? '위 오디오를 한국어로 정확히 전사하고, 전사된 내용을 바탕으로 회의록을 작성해주세요.'
+      : `트랜스크립트:\n${transcript}`
+
+    parts.push(`당신은 회의록 전문 AI 작성자입니다.
 
 회의 제목: ${title}
 참여자: ${participants.join(', ')}
 
-트랜스크립트:
-${transcript}
+${transcriptSection}
 
-=== 작성 지침 ===
+${audioBase64 ? `=== 전사 및 회의록 작성 지침 ===
+
+【utterances 필드 — 전사 결과】
+- 오디오 내용을 발화 단위로 전사하세요
+- speaker는 "Speaker 0"으로 통일 (화자 구분 없이)
+- timestamp는 "00:00:00" 형식
+- 각 문장/발화를 별도 utterance로
+
+【detail 필드】
+- 주제별 섹션으로 나누어 작성 "[주제명]" 헤더 사용
+- 논의 배경, 의견, 결론 포함
+
+【core 필드】
+- 최종 확정 사항만 번호 목록
+
+【나머지 필드】
+- keywords: 핵심 용어 8개
+- actions: 담당자·기한이 명확한 할 일
+- nextSteps: AI 제안 후속 행동 3가지
+
+다음 JSON 형식으로만 응답 (마크다운 없이):
+{
+  "utterances": [{"speaker": "Speaker 0", "speakerName": "Speaker 0", "text": "발화내용", "timestamp": "00:00:00", "isFinal": true}],
+  "detail": "...",
+  "core": "...",
+  "keywords": ["키워드1","키워드2","키워드3","키워드4","키워드5","키워드6","키워드7","키워드8"],
+  "actions": [{"id":"1","text":"액션","assignee":"담당자","due":"기한","priority":"high"}],
+  "nextSteps": [{"title":"제목","reason":"이유"}]
+}` : `=== 작성 지침 ===
 
 【공통 — 서술 시점 및 어조】
 - 모든 내용은 반드시 3인칭 객관적 시점으로 서술하세요.
@@ -47,8 +129,9 @@ ${transcript}
 
 다음 JSON 형식으로만 응답해주세요 (마크다운 코드블록 없이 순수 JSON):
 {
-  "detail": "[주제 1: 제목]\n내용...\n\n[주제 2: 제목]\n내용...",
-  "core": "1. 결정사항\n2. 결정사항",
+  "utterances": [],
+  "detail": "[주제 1: 제목]\\n내용...\\n\\n[주제 2: 제목]\\n내용...",
+  "core": "1. 결정사항\\n2. 결정사항",
   "keywords": ["키워드1", "키워드2", "키워드3", "키워드4", "키워드5", "키워드6", "키워드7", "키워드8"],
   "actions": [
     {
@@ -71,18 +154,9 @@ ${transcript}
 - actions의 priority는 "high", "medium", "low" 중 하나
 - nextSteps는 정확히 3개
 - 트랜스크립트에 없는 내용을 추가하거나 변조하지 마세요
-- 담당자가 불명확하면 "미정"으로 표기`
+- 담당자가 불명확하면 "미정"으로 표기`}`)
 
-    const model = genAI.getGenerativeModel({
-      model: 'gemini-2.5-flash',
-      generationConfig: {
-        responseMimeType: 'application/json',
-        maxOutputTokens: 16384,
-      },
-    })
-
-    const result = await model.generateContent(prompt)
-    const text = result.response.text()
+    const text = await generateWithFallback(parts)
 
     const match = text.match(/\{[\s\S]*\}/)
     if (match) {
@@ -154,12 +228,15 @@ ${transcript}
         if (Array.isArray(v)) return v.join('\n')
         return String(v ?? '')
       }
+      const utterancesFromAudio = Array.isArray(raw.utterances) ? raw.utterances : []
       const minutes = {
-        ...raw,
         detail: toStr(raw.detail),
         core:   toStr(raw.core),
+        keywords: raw.keywords,
+        actions: raw.actions,
+        nextSteps: raw.nextSteps,
       }
-      return NextResponse.json({ minutes })
+      return NextResponse.json({ minutes, utterances: utterancesFromAudio })
     }
     return NextResponse.json({ error: 'JSON 파싱 실패', raw: text }, { status: 500 })
   } catch (e) {

@@ -95,6 +95,8 @@ interface MeetingStore {
   finalizeLastUtterance: (text: string) => void
   speakerMap: Record<string, string>
   setSpeakerName: (speaker: string, name: string) => void
+  keywords: string[]
+  addKeywords: (kws: string[]) => void
 
   // Analysis
   isAnalyzing: boolean
@@ -191,6 +193,10 @@ export const useMeetingStore = create<MeetingStore>((set, get) => ({
   speakerMap: {},
   setSpeakerName: (speaker, name) =>
     set((s) => ({ speakerMap: { ...s.speakerMap, [speaker]: name } })),
+  keywords: [],
+  addKeywords: (kws) => set((s) => ({
+    keywords: [...new Set([...s.keywords, ...kws])]  // deduplicate
+  })),
 
   isAnalyzing: false,
   setAnalyzing: (isAnalyzing) => set({ isAnalyzing }),
@@ -216,6 +222,7 @@ export const useMeetingStore = create<MeetingStore>((set, get) => ({
       elapsedSeconds: 0,
       utterances: [],
       speakerMap: {},
+      keywords: [],
       isAnalyzing: false,
       minutes: null,
       analysisError: null,

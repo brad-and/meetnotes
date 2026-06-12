@@ -5,11 +5,11 @@ import { useMeetingStore } from '@/store/meetingStore'
 /** 브라우저가 지원하는 가장 호환성 높은 오디오 포맷 선택 */
 function pickMimeType(): string {
   const candidates = [
-    'audio/mp4',              // Safari / iOS / macOS QuickTime ✅
+    'audio/mp4',
     'audio/mp4;codecs=aac',
-    'audio/ogg;codecs=opus',  // Firefox ✅
-    'audio/webm;codecs=opus', // Chrome / Edge ✅
-    'audio/webm',             // 최후 fallback
+    'audio/ogg;codecs=opus',
+    'audio/webm;codecs=opus',
+    'audio/webm',
   ]
   return candidates.find((t) => MediaRecorder.isTypeSupported(t)) ?? 'audio/webm'
 }
@@ -21,34 +21,39 @@ export function mimeTypeToExt(mimeType: string): string {
   return 'webm'
 }
 
+const SPEECH_THRESHOLD   = 15   // 발화 판단 임계값 (0-100)
+const SPEECH_CONFIRM     = 3    // 연속 3번(600ms) 이상 감지돼야 발화 확정
+const MIN_SPEECH_FRAMES  = 2    // 키워드 전송 시 최소 발화 프레임(×200ms = 400ms)
+const KEYWORD_INTERVAL_MS = 20000 // 20초마다 키워드 추출
+
 export function useDeepgram() {
-  const wsRef               = useRef<WebSocket | null>(null)
   const mediaRecorderRef    = useRef<MediaRecorder | null>(null)
   const streamRef           = useRef<MediaStream | null>(null)
   const timerRef            = useRef<NodeJS.Timeout | null>(null)
   const audioChunksRef      = useRef<Blob[]>([])
+  const batchChunksRef      = useRef<Blob[]>([])
+  const initChunkRef        = useRef<Blob | null>(null)
   const mimeTypeRef         = useRef<string>('audio/webm')
+
+  // 발화 감지 상태
+  const volSamplerRef       = useRef<NodeJS.Timeout | null>(null)
+  const isSpeakingRef       = useRef<boolean>(false)
+  const speechCountRef      = useRef<number>(0)   // 연속 발화 카운터
+  const speechFramesRef     = useRef<number>(0)   // 배치 내 누적 발화 프레임 수
+
+  // 키워드 추출 인터벌
+  const keywordIntervalRef  = useRef<NodeJS.Timeout | null>(null)
 
   // Web Audio API 처리 체인
   const audioCtxRef         = useRef<AudioContext | null>(null)
   const gainNodeRef         = useRef<GainNode | null>(null)
   const analyserRef         = useRef<AnalyserNode | null>(null)
-  const gainLevelRef        = useRef<number>(2.0)   // 기본 2x 부스트
-  const deviceIdRef         = useRef<string>('')    // '' = 기본 마이크
+  const gainLevelRef        = useRef<number>(2.0)
+  const deviceIdRef         = useRef<string>('')
 
-  // 발화 추적
-  const pendingIdRef        = useRef<string | null>(null)
-  const utteranceEndedRef   = useRef<boolean>(false)
   const recordingGenRef     = useRef(0)
 
   const { setRecording, setPaused, setElapsedSeconds } = useMeetingStore()
-
-  const formatTime = (s: number) => {
-    const h = Math.floor(s / 3600).toString().padStart(2, '0')
-    const m = Math.floor((s % 3600) / 60).toString().padStart(2, '0')
-    const sec = (s % 60).toString().padStart(2, '0')
-    return `${h}:${m}:${sec}`
-  }
 
   /** 현재 마이크 볼륨 레벨 반환 (0-100) */
   const getVolumeLevel = useCallback((): number => {
@@ -56,35 +61,110 @@ export function useDeepgram() {
     const bufferLength = analyserRef.current.fftSize
     const dataArray    = new Uint8Array(bufferLength)
     analyserRef.current.getByteTimeDomainData(dataArray)
-    // RMS (Root Mean Square) 계산
     let sum = 0
     for (let i = 0; i < bufferLength; i++) {
-      const sample = (dataArray[i] - 128) / 128  // -1 ~ 1 정규화
+      const sample = (dataArray[i] - 128) / 128
       sum += sample * sample
     }
-    const rms = Math.sqrt(sum / bufferLength)
-    return Math.min(100, rms * 350)  // 0-100 스케일
+    return Math.min(100, Math.sqrt(sum / bufferLength) * 350)
   }, [])
 
-  /** 실시간으로 게인(감도) 조절 — 녹음 중에도 즉시 반영 */
+  /** 실시간으로 게인(감도) 조절 */
   const setGain = useCallback((level: number) => {
     gainLevelRef.current = level
     if (gainNodeRef.current) gainNodeRef.current.gain.value = level
   }, [])
 
+  /** 누적된 배치 청크를 /api/keywords로 전송하여 키워드 추출 */
+  const sendKeywords = useCallback(async () => {
+    const batch = [...batchChunksRef.current]
+    batchChunksRef.current = []
+
+    const frames = speechFramesRef.current
+    speechFramesRef.current = 0
+
+    console.log('[Keywords] called — frames:', frames, 'chunks:', batch.length, 'minFrames:', MIN_SPEECH_FRAMES)
+
+    if (frames < MIN_SPEECH_FRAMES) {
+      console.log('[Keywords] skip — 발화 프레임 부족:', frames, '<', MIN_SPEECH_FRAMES)
+      return
+    }
+    if (batch.length === 0) {
+      console.log('[Keywords] skip — 오디오 청크 없음')
+      return
+    }
+
+    const initChunk = initChunkRef.current
+    const fullBatch = (initChunk && batch[0] !== initChunk)
+      ? [initChunk, ...batch]
+      : batch
+
+    const blob = new Blob(fullBatch, { type: mimeTypeRef.current })
+    console.log('[Keywords] blob size:', blob.size, 'type:', mimeTypeRef.current)
+    if (blob.size < 2000) {
+      console.log('[Keywords] skip — blob 너무 작음:', blob.size)
+      return
+    }
+
+    const ext = mimeTypeToExt(mimeTypeRef.current)
+    const form = new FormData()
+    form.append('audio', new File([blob], `chunk.${ext}`, { type: mimeTypeRef.current }))
+
+    try {
+      console.log('[Keywords] POST /api/keywords ...')
+      const res = await fetch('/api/keywords', { method: 'POST', body: form })
+      const json = await res.json()
+      console.log('[Keywords] 응답:', res.status, json)
+      if (res.ok && Array.isArray(json.keywords) && json.keywords.length > 0) {
+        useMeetingStore.getState().addKeywords(json.keywords)
+        console.log('[Keywords] 추가됨:', json.keywords)
+      }
+    } catch (err) {
+      console.error('[Keywords chunk]', err)
+    }
+  }, [])
+
+  /** 발화 감지 샘플러 시작 — VU 시각화 및 speechFrames 추적만 담당 */
+  const startVolSampler = useCallback(() => {
+    isSpeakingRef.current   = false
+    speechCountRef.current  = 0
+    speechFramesRef.current = 0
+
+    volSamplerRef.current = setInterval(() => {
+      const level = getVolumeLevel()
+
+      if (level > SPEECH_THRESHOLD) {
+        speechCountRef.current++
+
+        // 임계값 이상인 모든 샘플에서 프레임 누적 (연속 여부 무관)
+        speechFramesRef.current++
+
+        // 연속 SPEECH_CONFIRM번 이상이면 발화 시작 확정
+        if (speechCountRef.current >= SPEECH_CONFIRM) {
+          if (!isSpeakingRef.current) {
+            isSpeakingRef.current = true
+          }
+        }
+      } else {
+        speechCountRef.current = 0
+        if (isSpeakingRef.current) {
+          isSpeakingRef.current = false
+        }
+      }
+    }, 200)
+  }, [getVolumeLevel])
+
   const startRecording = useCallback(async (deviceId?: string) => {
     const gen = ++recordingGenRef.current
-    // deviceId가 전달되면 ref 업데이트
     if (deviceId !== undefined) deviceIdRef.current = deviceId
 
     try {
-      // ── 1. 향상된 오디오 제약 ───────────────────────────────────────────
-      // sampleRate는 지정하지 않음 — 브라우저 기본값 사용 (호환성 우선)
+      // ── 1. 향상된 오디오 제약 ─────────────────────────────────────────────
       const audioConstraints: MediaTrackConstraints = {
-        echoCancellation: true,    // 에코 제거 (스피커 → 마이크 피드백 방지)
-        noiseSuppression: true,    // 배경 소음 억제 (키보드, 에어컨 등)
-        autoGainControl: true,     // 브라우저 내장 자동 게인 (조용한 환경 보정)
-        channelCount: 1,           // 모노 (파일 크기 절반, Deepgram 권장)
+        echoCancellation: true,
+        noiseSuppression: true,
+        autoGainControl: true,
+        channelCount: 1,
       }
       if (deviceIdRef.current) {
         audioConstraints.deviceId = { exact: deviceIdRef.current }
@@ -98,51 +178,41 @@ export function useDeepgram() {
       }
       streamRef.current = stream
 
-      // ── 2. Web Audio API 처리 체인 ────────────────────────────────────
-      // source → gainNode → compressor → analyser → destination
+      // ── 2. Web Audio API 처리 체인 ────────────────────────────────────────
       const audioCtx = new AudioContext()
       audioCtxRef.current = audioCtx
 
-      // ★ 핵심: useEffect 내부에서 생성된 AudioContext는 Chrome에서
-      //   suspended 상태로 시작됨. resume()을 명시적으로 호출해야 함.
-      //   suspended 상태에서는 음성이 흐르지 않아 Deepgram이 무음을 수신.
+      // AudioContext가 suspended 상태로 시작될 수 있음 (Chrome 정책)
       if (audioCtx.state === 'suspended') {
         await audioCtx.resume()
       }
 
       const source = audioCtx.createMediaStreamSource(stream)
 
-      // GainNode: 조용한 목소리 증폭 (gainLevelRef 값으로 실시간 조절 가능)
       const gainNode = audioCtx.createGain()
       gainNode.gain.value = gainLevelRef.current
       gainNodeRef.current = gainNode
 
-      // DynamicsCompressor: 큰 소리 클리핑 방지 + 전체 다이나믹 레인지 압축
-      //   → 작은 목소리와 큰 목소리가 비슷한 레벨로 맞춰짐
       const compressor = audioCtx.createDynamicsCompressor()
-      compressor.threshold.value = -24  // -24dB 이상 압축 시작
-      compressor.knee.value       = 30  // 소프트 니 (자연스러운 전환)
-      compressor.ratio.value      = 12  // 12:1 강압축
+      compressor.threshold.value = -24
+      compressor.knee.value       = 30
+      compressor.ratio.value      = 12
       compressor.attack.value     = 0.003
       compressor.release.value    = 0.25
 
-      // AnalyserNode: 볼륨 레벨 모니터링 (VU 미터용)
       const analyser = audioCtx.createAnalyser()
-      analyser.fftSize              = 512
-      analyser.smoothingTimeConstant = 0.8  // 부드러운 시각화
-      analyserRef.current           = analyser
+      analyser.fftSize               = 512
+      analyser.smoothingTimeConstant = 0.8
+      analyserRef.current            = analyser
 
-      // 처리 체인 연결
       const destination = audioCtx.createMediaStreamDestination()
       source.connect(gainNode)
       gainNode.connect(compressor)
       compressor.connect(analyser)
       analyser.connect(destination)
 
-      // 처리된 스트림 유효성 확인 후 사용
       const processedStream = destination.stream
       const processedTrack  = processedStream.getAudioTracks()[0]
-      // processedStream이 유효하지 않으면 원본 stream을 fallback으로 사용
       const recordingStream = (processedTrack && processedTrack.readyState === 'live')
         ? processedStream
         : stream
@@ -150,120 +220,37 @@ export function useDeepgram() {
         console.warn('[useDeepgram] processedStream 트랙 없음 — 원본 stream fallback 사용')
       }
 
-      // ── 3. Deepgram 토큰 발급 ────────────────────────────────────────
-      const tokenRes = await fetch('/api/transcribe/token')
       if (gen !== recordingGenRef.current) return
-      const { token } = await tokenRes.json()
 
-      // ── 4. Deepgram WebSocket — 향상된 파라미터 ───────────────────────
-      const ws = new WebSocket(
-        `wss://api.deepgram.com/v1/listen?` +
-        `language=ko` +
-        `&model=nova-2` +
-        `&diarize=true` +
-        `&punctuate=true` +
-        `&smart_format=true` +          // 숫자, 날짜, 통화 자동 포맷
-        `&interim_results=true` +
-        `&utterance_end_ms=1500` +      // 1000 → 1500: 자연스러운 발화 경계
-        `&endpointing=380` +            // 발화 종료 민감도 최적화
-        `&vad_events=true`,
-        ['token', token]
-      )
-      if (gen !== recordingGenRef.current) { ws.close(); return }
-      wsRef.current = ws
+      // ── 3. MediaRecorder 설정 ─────────────────────────────────────────────
+      audioChunksRef.current   = []
+      batchChunksRef.current   = []
+      initChunkRef.current     = null
 
-      ws.onopen = () => {
-        if (gen !== recordingGenRef.current) { ws.close(); return }
-        audioChunksRef.current    = []
-        pendingIdRef.current      = null
-        utteranceEndedRef.current = false
-        const mimeType = pickMimeType()
-        mimeTypeRef.current = mimeType
-        // gain+compressor 처리된 스트림 사용 (fallback 포함)
-        const mediaRecorder = new MediaRecorder(recordingStream, { mimeType })
-        mediaRecorderRef.current = mediaRecorder
-        mediaRecorder.onerror = (e) => console.error('[MediaRecorder] error:', e)
-        mediaRecorder.ondataavailable = (e) => {
-          if (e.data.size > 0) audioChunksRef.current.push(e.data)
-          if (ws.readyState === WebSocket.OPEN) ws.send(e.data)
-        }
-        mediaRecorder.start(250)
-      }
+      const mimeType = pickMimeType()
+      mimeTypeRef.current = mimeType
 
-      ws.onerror = (e) => console.error('[WebSocket] error:', e)
-      ws.onclose = (e) => {
-        if (e.code !== 1000 && e.code !== 1001) {
-          console.warn('[WebSocket] 비정상 종료:', e.code, e.reason)
+      const mediaRecorder = new MediaRecorder(recordingStream, { mimeType })
+      mediaRecorderRef.current = mediaRecorder
+
+      mediaRecorder.onerror = (e) => console.error('[MediaRecorder] error:', e)
+      mediaRecorder.ondataavailable = (e) => {
+        if (e.data.size > 0) {
+          audioChunksRef.current.push(e.data)
+          batchChunksRef.current.push(e.data)
+          if (!initChunkRef.current) initChunkRef.current = e.data
         }
       }
 
-      ws.onmessage = (event) => {
-        if (!event.data) return
-        // eslint-disable-next-line @typescript-eslint/no-explicit-any
-        let data: any
-        try { data = JSON.parse(event.data) } catch { return }
+      mediaRecorder.start(250)
 
-        const store = useMeetingStore.getState()
+      // ── 4. 발화 감지 (VU 시각화용) ───────────────────────────────────────
+      startVolSampler()
 
-        // ── UtteranceEnd ────────────────────────────────────────────────
-        if (data.type === 'UtteranceEnd') {
-          if (pendingIdRef.current !== null) {
-            store.finalizeLastUtterance(
-              store.utterances.find(u => !u.isFinal)?.text ?? ''
-            )
-            pendingIdRef.current    = null
-            utteranceEndedRef.current = true
-          }
-          return
-        }
-
-        if (!data.channel?.alternatives?.[0]) return
-        const alt        = data.channel.alternatives[0]
-        const transcript = alt.transcript?.trim()
-        if (!transcript) return
-
-        const speaker     = `Speaker ${alt.words?.[0]?.speaker ?? 0}`
-        const speakerName = store.speakerMap[speaker] || speaker
-        const ts          = formatTime(store.elapsedSeconds)
-        const isSpeechFinal: boolean = data.speech_final === true
-
-        if (isSpeechFinal) {
-          if (pendingIdRef.current !== null) {
-            store.finalizeLastUtterance(transcript)
-            pendingIdRef.current    = null
-            utteranceEndedRef.current = false
-          } else if (utteranceEndedRef.current) {
-            utteranceEndedRef.current = false
-          } else {
-            store.addUtterance({
-              id: `sf-${Date.now()}`,
-              speaker, speakerName, text: transcript, timestamp: ts, isFinal: true,
-            })
-          }
-        } else if (data.is_final) {
-          utteranceEndedRef.current = false
-          if (pendingIdRef.current !== null) {
-            store.updateLastUtterance(transcript)
-          } else {
-            const id = `${Date.now()}`
-            pendingIdRef.current = id
-            store.addUtterance({
-              id, speaker, speakerName, text: transcript, timestamp: ts, isFinal: false,
-            })
-          }
-        } else {
-          utteranceEndedRef.current = false
-          if (pendingIdRef.current !== null) {
-            store.updateLastUtterance(transcript)
-          } else {
-            const id = `interim-${Date.now()}`
-            pendingIdRef.current = id
-            store.addUtterance({
-              id, speaker, speakerName, text: transcript, timestamp: ts, isFinal: false,
-            })
-          }
-        }
-      }
+      // ── 5. 45초 키워드 추출 인터벌 ────────────────────────────────────────
+      keywordIntervalRef.current = setInterval(() => {
+        sendKeywords()
+      }, KEYWORD_INTERVAL_MS)
 
       // 타이머
       let sec = 0
@@ -277,10 +264,12 @@ export function useDeepgram() {
       console.error('Recording error:', err)
       alert('마이크 권한이 필요해요. 브라우저 설정에서 허용해주세요.')
     }
-  }, [setRecording, setElapsedSeconds])
+  }, [setRecording, setElapsedSeconds, sendKeywords, startVolSampler])
 
   const pauseRecording = useCallback(() => {
     if (mediaRecorderRef.current?.state === 'recording') {
+      if (volSamplerRef.current) clearInterval(volSamplerRef.current)
+      if (keywordIntervalRef.current) clearInterval(keywordIntervalRef.current)
       mediaRecorderRef.current.pause()
       if (timerRef.current) clearInterval(timerRef.current)
       setPaused(true)
@@ -289,34 +278,41 @@ export function useDeepgram() {
 
   const resumeRecording = useCallback(async () => {
     if (mediaRecorderRef.current?.state === 'paused') {
-      // 일시정지 중 AudioContext가 자동 suspend 됐을 경우 재개
       if (audioCtxRef.current?.state === 'suspended') {
         await audioCtxRef.current.resume()
       }
+      batchChunksRef.current   = []
       mediaRecorderRef.current.resume()
+
       const currentSec = useMeetingStore.getState().elapsedSeconds
       let sec = currentSec
       timerRef.current = setInterval(() => {
         sec++
         setElapsedSeconds(sec)
       }, 1000)
+
+      startVolSampler()
+
+      // 재개 시 키워드 인터벌 재시작
+      keywordIntervalRef.current = setInterval(() => {
+        sendKeywords()
+      }, KEYWORD_INTERVAL_MS)
+
       setPaused(false)
     }
-  }, [setPaused, setElapsedSeconds])
+  }, [setPaused, setElapsedSeconds, startVolSampler, sendKeywords])
 
   const stopRecording = useCallback(() => {
     recordingGenRef.current++
+    if (volSamplerRef.current) clearInterval(volSamplerRef.current)
+    if (keywordIntervalRef.current) clearInterval(keywordIntervalRef.current)
     mediaRecorderRef.current?.stop()
-    wsRef.current?.close()
     streamRef.current?.getTracks().forEach((t) => t.stop())
-    // Web Audio 정리
     audioCtxRef.current?.close().catch(() => {})
     audioCtxRef.current  = null
     gainNodeRef.current  = null
     analyserRef.current  = null
     if (timerRef.current) clearInterval(timerRef.current)
-    pendingIdRef.current      = null
-    utteranceEndedRef.current = false
     setRecording(false)
     setPaused(false)
   }, [setRecording, setPaused])

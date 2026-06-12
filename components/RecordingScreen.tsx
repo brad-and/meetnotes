@@ -1,7 +1,7 @@
 'use client'
 import { useEffect, useRef, useState, useCallback } from 'react'
 import { useMeetingStore } from '@/store/meetingStore'
-import { useDeepgram } from '@/lib/useDeepgram'
+import { useDeepgram, mimeTypeToExt } from '@/lib/useDeepgram'
 import Topbar from '@/components/ui/Topbar'
 
 const SPEAKER_COLORS = ['#1ed760', '#539df5', '#ffa42b', '#c77dff', '#f3727f']
@@ -11,7 +11,7 @@ const GAIN_PRESETS = [0.5, 1.0, 1.5, 2.0, 3.0, 4.0]
 const GAIN_LABELS: Record<number, string> = {
   0.5: '0.5x', 1.0: '1x', 1.5: '1.5x', 2.0: '2x', 3.0: '3x', 4.0: '4x',
 }
-const BAR_COUNT = 24
+const BAR_COUNT = 60
 
 function formatTime(s: number) {
   const h = Math.floor(s / 3600).toString().padStart(2, '0')
@@ -25,16 +25,127 @@ function getSpeakerIdx(speaker: string) {
   return num % SPEAKER_COLORS.length
 }
 
+function CircularVU({ bars, isPaused }: { bars: number[]; isPaused: boolean }) {
+  const N       = bars.length
+  const CX = 110, CY = 110
+  const INNER_R = 60
+  const MAX_BAR = 42
+
+  const barColor = (ratio: number) => {
+    if (ratio > 0.85) return '#f3727f'
+    if (ratio > 0.65) return '#ffa42b'
+    if (ratio > 0.28) return '#1ed760'
+    return '#3d8fd4'
+  }
+
+  return (
+    <svg width="220" height="220" viewBox="0 0 220 220">
+      <defs>
+        <filter id="vuGlow" x="-60%" y="-60%" width="220%" height="220%">
+          <feGaussianBlur stdDeviation="3" result="blur" />
+          <feMerge>
+            <feMergeNode in="blur" />
+            <feMergeNode in="SourceGraphic" />
+          </feMerge>
+        </filter>
+        <radialGradient id="centerFill" cx="50%" cy="50%" r="50%">
+          <stop offset="0%" stopColor="#1c1c1c" />
+          <stop offset="100%" stopColor="#111" />
+        </radialGradient>
+      </defs>
+
+      {/* Inner disc */}
+      <circle cx={CX} cy={CY} r={INNER_R} fill="url(#centerFill)" />
+      <circle cx={CX} cy={CY} r={INNER_R} fill="none" stroke="#1f1f1f" strokeWidth="1" />
+
+      {/* Ambient pulse ring */}
+      {!isPaused && (
+        <circle cx={CX} cy={CY} r={INNER_R - 14} fill="none"
+          stroke="#1ed760" strokeWidth="22" opacity="0.055"
+          style={{ animation: 'pulseRing 2s ease-in-out infinite' }}
+        />
+      )}
+
+      {/* Background tick marks */}
+      {Array.from({ length: N }, (_, i) => {
+        const angle = (i / N) * Math.PI * 2 - Math.PI / 2
+        return (
+          <line key={`bg-${i}`}
+            x1={CX + INNER_R * Math.cos(angle)}
+            y1={CY + INNER_R * Math.sin(angle)}
+            x2={CX + (INNER_R + 4) * Math.cos(angle)}
+            y2={CY + (INNER_R + 4) * Math.sin(angle)}
+            stroke="#282828" strokeWidth="1.5" strokeLinecap="round"
+          />
+        )
+      })}
+
+      {/* Active bars */}
+      {bars.map((h, i) => {
+        const angle   = (i / N) * Math.PI * 2 - Math.PI / 2
+        const ratio   = h / 26
+        const barLen  = isPaused ? 2 : Math.max(2, ratio * MAX_BAR)
+        const color   = isPaused ? '#252525' : barColor(ratio)
+        const opacity = isPaused ? 0.15 : Math.max(0.4, ratio * 1.1)
+        return (
+          <line key={i}
+            x1={CX + INNER_R * Math.cos(angle)}
+            y1={CY + INNER_R * Math.sin(angle)}
+            x2={CX + (INNER_R + barLen) * Math.cos(angle)}
+            y2={CY + (INNER_R + barLen) * Math.sin(angle)}
+            stroke={color} strokeWidth="2" strokeLinecap="round" opacity={opacity}
+            style={{ transition: isPaused ? 'none' : 'all 55ms ease-out' }}
+          />
+        )
+      })}
+
+      {/* Glow layer for tall bars */}
+      {!isPaused && bars.some((h) => h / 26 >= 0.5) && (
+        <g filter="url(#vuGlow)">
+          {bars.map((h, i) => {
+            const ratio = h / 26
+            if (ratio < 0.5) return null
+            const angle  = (i / N) * Math.PI * 2 - Math.PI / 2
+            const barLen = ratio * MAX_BAR
+            return (
+              <line key={`g-${i}`}
+                x1={CX + INNER_R * Math.cos(angle)}
+                y1={CY + INNER_R * Math.sin(angle)}
+                x2={CX + (INNER_R + barLen) * Math.cos(angle)}
+                y2={CY + (INNER_R + barLen) * Math.sin(angle)}
+                stroke={barColor(ratio)} strokeWidth="2" strokeLinecap="round"
+                opacity={ratio * 0.7}
+              />
+            )
+          })}
+        </g>
+      )}
+
+      {/* Mic icon */}
+      <g transform={`translate(${CX},${CY - 2})`} opacity={isPaused ? 0.3 : 1}>
+        <rect x="-8" y="-17" width="16" height="22" rx="8"
+          fill="none" stroke={isPaused ? '#3a3a3a' : '#1ed760'} strokeWidth="2" />
+        <path d="M -12,8 A 12,12 0 0,0 12,8"
+          fill="none" stroke={isPaused ? '#3a3a3a' : '#1ed760'} strokeWidth="2" strokeLinecap="round" />
+        <line x1="0" y1="20" x2="0" y2="15"
+          stroke={isPaused ? '#3a3a3a' : '#1ed760'} strokeWidth="2" strokeLinecap="round" />
+        <line x1="-5" y1="20" x2="5" y2="20"
+          stroke={isPaused ? '#3a3a3a' : '#1ed760'} strokeWidth="2" strokeLinecap="round" />
+      </g>
+    </svg>
+  )
+}
+
 export default function RecordingScreen() {
   const {
     isPaused, elapsedSeconds, utterances, participants,
     isRecording, setStep, setAnalyzing, setMinutes, title, addToHistory,
-    meetingType, addUtterance, setElapsedSeconds, speakerMap, setSpeakerName, setAudioUrl, setAudioMimeType,
-    setCurrentMeetingId, setAnalysisError,
+    meetingType, addUtterance, setElapsedSeconds, speakerMap, setSpeakerName,
+    setAudioUrl, setAudioMimeType, setCurrentMeetingId, setAnalysisError,
+    keywords,
   } = useMeetingStore()
   const { startRecording, pauseRecording, resumeRecording, stopRecording, getAudioBlob, getAudioMimeType, setGain, getVolumeLevel, gainLevelRef } = useDeepgram()
   const [activeTab, setActiveTab] = useState<'summary' | 'speakers' | 'actions'>('summary')
-  const transcriptRef = useRef<HTMLDivElement>(null)
 
   // Online meeting file upload state
   const [uploadFile, setUploadFile] = useState<File | null>(null)
@@ -48,7 +159,7 @@ export default function RecordingScreen() {
   const [selectedMicId, setSelectedMicId] = useState<string>('')
   const [showMicMenu, setShowMicMenu]     = useState(false)
   // VU 미터 애니메이션
-  const [volumeBars, setVolumeBars]       = useState<number[]>(Array(BAR_COUNT).fill(4))
+  const [volumeBars, setVolumeBars]       = useState<number[]>(Array(BAR_COUNT).fill(2))
   const animFrameRef                      = useRef<number | null>(null)
 
   // 마이크 목록 가져오기 (권한 허용 후에야 label 표시)
@@ -65,19 +176,14 @@ export default function RecordingScreen() {
   // VU 미터 — requestAnimationFrame 루프
   useEffect(() => {
     if (!isRecording || isPaused) {
-      setVolumeBars(Array(BAR_COUNT).fill(4))
+      setVolumeBars(Array(BAR_COUNT).fill(2))
       return
     }
     const animate = () => {
       const level = getVolumeLevel()  // 0-100
-      const bars  = Array.from({ length: BAR_COUNT }, (_, i) => {
-        // 가운데가 높은 종형 곡선 + 실제 볼륨 연동
-        const center  = (BAR_COUNT - 1) / 2
-        const dist    = Math.abs(i - center) / center          // 0 = 중앙, 1 = 끝
-        const bell    = 1 - dist * 0.55                         // 종형 계수
-        const height  = Math.max(3, level * bell)
-        const jitter  = level > 3 ? (Math.random() - 0.5) * level * 0.3 : 0
-        return Math.min(26, Math.max(3, height + jitter))
+      const bars  = Array.from({ length: BAR_COUNT }, () => {
+        const jitter = level > 4 ? (Math.random() - 0.5) * level * 0.65 : 0
+        return Math.min(26, Math.max(2, level * 0.8 + jitter))
       })
       setVolumeBars(bars)
       animFrameRef.current = requestAnimationFrame(animate)
@@ -114,12 +220,6 @@ export default function RecordingScreen() {
     }
   }, [meetingType])
 
-  useEffect(() => {
-    if (transcriptRef.current) {
-      transcriptRef.current.scrollTop = transcriptRef.current.scrollHeight
-    }
-  }, [utterances])
-
   const handleFileUpload = useCallback(async () => {
     if (!uploadFile) return
     setIsTranscribing(true)
@@ -146,11 +246,12 @@ export default function RecordingScreen() {
   }, [uploadFile, addUtterance, setElapsedSeconds])
 
   const handleStop = async () => {
+    let audioBlob: Blob | null = null
     if (meetingType === 'face') {
       stopRecording()
-      const blob = getAudioBlob()
-      if (blob) {
-        setAudioUrl(URL.createObjectURL(blob))
+      audioBlob = getAudioBlob()
+      if (audioBlob) {
+        setAudioUrl(URL.createObjectURL(audioBlob))
         setAudioMimeType(getAudioMimeType())
       }
     }
@@ -158,31 +259,48 @@ export default function RecordingScreen() {
     setAnalyzing(true)
     setAnalysisError(null)
 
-    // Build transcript string
-    const transcript = utterances
-      .filter((u) => u.isFinal)
-      .map((u) => `${u.speakerName}: ${u.text}`)
-      .join('\n')
-
     const meetingId = Date.now().toString()
-    const finalUtterances = utterances.filter((u) => u.isFinal)
 
     try {
-      const res = await fetch('/api/analyze', {
-        method: 'POST',
-        headers: { 'Content-Type': 'application/json' },
-        body: JSON.stringify({
-          transcript: transcript || '(트랜스크립트 없음)',
-          participants: participants.map((p) => p.name),
-          title,
-        }),
-      })
+      let res: Response
+
+      if (meetingType === 'face' && audioBlob) {
+        const mimeType = getAudioMimeType()
+        const form = new FormData()
+        form.append('audio', new File([audioBlob], `meeting.${mimeTypeToExt(mimeType)}`, { type: mimeType }))
+        form.append('title', title)
+        form.append('participants', JSON.stringify(participants.map((p) => p.name)))
+        res = await fetch('/api/analyze', { method: 'POST', body: form })
+      } else {
+        // online meeting: use existing transcript from file upload
+        const transcript = utterances
+          .filter((u) => u.isFinal)
+          .map((u) => `${u.speakerName}: ${u.text}`)
+          .join('\n')
+        res = await fetch('/api/analyze', {
+          method: 'POST',
+          headers: { 'Content-Type': 'application/json' },
+          body: JSON.stringify({
+            transcript: transcript || '(트랜스크립트 없음)',
+            participants: participants.map((p) => p.name),
+            title,
+          }),
+        })
+      }
+
       if (!res.ok) {
         const text = await res.text()
         throw new Error(`분석 API 오류 (${res.status}): ${text}`)
       }
       const data = await res.json()
+      const finalUtterances = data.utterances ?? utterances.filter((u) => u.isFinal)
       if (data.minutes) {
+        // audio 전사 결과가 있으면 store에 추가
+        if (data.utterances && Array.isArray(data.utterances)) {
+          for (const u of data.utterances) {
+            addUtterance({ ...u, id: `${Date.now()}-${Math.random()}` })
+          }
+        }
         setMinutes(data.minutes)
         setCurrentMeetingId(meetingId)
         await addToHistory({
@@ -201,9 +319,9 @@ export default function RecordingScreen() {
       const errMsg = e instanceof Error ? e.message : String(e)
       console.error('Analysis error:', e)
 
-      // AI 분석 실패해도 트랜스크립트·참여자 정보를 보존
+      // AI 분석 실패해도 참여자 정보를 보존
       const fallbackMinutes = {
-        detail: transcript || '(트랜스크립트 없음)',
+        detail: '(분석 실패)',
         core: '',
         keywords: [] as string[],
         actions: [] as { id: string; text: string; assignee: string; due: string; priority: 'high' | 'medium' | 'low' }[],
@@ -219,7 +337,7 @@ export default function RecordingScreen() {
         duration: elapsedSeconds,
         participants: participants.map((p) => p.name),
         minutes: fallbackMinutes,
-        utterances: finalUtterances,
+        utterances: utterances.filter((u) => u.isFinal),
         slackSent: false,
         archived: false,
       }).catch((saveErr) => console.error('Fallback save error:', saveErr))
@@ -228,7 +346,7 @@ export default function RecordingScreen() {
     }
   }
 
-  // Speaker stats
+  // Speaker stats (for online meeting uploaded transcript)
   const speakerStats = utterances.filter((u) => u.isFinal).reduce((acc, u) => {
     acc[u.speaker] = (acc[u.speaker] || 0) + u.text.split(' ').length
     return acc
@@ -371,66 +489,76 @@ export default function RecordingScreen() {
 
       <div style={{ flex: 1, display: 'flex', justifyContent: 'center', overflow: 'hidden', minHeight: 0 }}>
       <div style={{ width: '100%', maxWidth: 960, display: 'grid', gridTemplateColumns: '1fr 280px', overflow: 'hidden', minHeight: 0 }}>
-        {/* Left: Transcript */}
+        {/* Left: Recording status panel */}
         <div style={{ display: 'flex', flexDirection: 'column', borderRight: '1px solid #2a2a2a', minHeight: 0, overflow: 'hidden' }}>
           <div style={{
             padding: '12px 18px', borderBottom: '1px solid #2a2a2a',
             background: '#181818', display: 'flex', alignItems: 'center', justifyContent: 'space-between',
           }}>
-            <span style={{ fontSize: 13, fontWeight: 700, textTransform: 'uppercase', letterSpacing: '1.4px' }}>실시간 자막</span>
-            <div style={{ display: 'flex', gap: 6 }}>
-              {participants.slice(0, 4).map((p, i) => (
-                <div key={p.id} style={{
-                  display: 'flex', alignItems: 'center', gap: 4, fontSize: 11, fontWeight: 700,
-                  padding: '3px 10px', borderRadius: 9999,
-                  background: SPEAKER_BG[i % SPEAKER_BG.length],
-                  color: SPEAKER_COLORS[i % SPEAKER_COLORS.length],
-                }}>
-                  <div style={{ width: 5, height: 5, borderRadius: '50%', background: SPEAKER_COLORS[i % SPEAKER_COLORS.length] }} />
-                  {p.name}
-                </div>
-              ))}
+            <div style={{ display: 'flex', alignItems: 'center', gap: 8 }}>
+              <div style={{
+                width: 8, height: 8, borderRadius: '50%', background: '#f3727f',
+                animation: isPaused ? 'none' : 'pulse 1.2s ease-in-out infinite',
+              }} />
+              <span style={{ fontSize: 13, fontWeight: 700, textTransform: 'uppercase', letterSpacing: '1.4px' }}>
+                {isPaused ? '일시정지' : '녹음 중'}
+              </span>
             </div>
           </div>
 
-          <div ref={transcriptRef} style={{ flex: 1, overflowY: 'auto', padding: '16px 18px', display: 'flex', flexDirection: 'column', gap: 14 }}>
-            {utterances.length === 0 && (
-              <div style={{ color: '#4d4d4d', fontSize: 14, textAlign: 'center', marginTop: 40 }}>
-                마이크 입력을 기다리는 중...
+          {/* Main recording area */}
+          <div style={{ flex: 1, overflowY: 'auto', padding: '24px 18px', display: 'flex', flexDirection: 'column', gap: 24 }}>
+            {/* Circular VU Visualizer */}
+            <div style={{ display: 'flex', flexDirection: 'column', alignItems: 'center', gap: 6 }}>
+              <CircularVU bars={volumeBars} isPaused={isPaused} />
+              <span style={{ fontSize: 11, color: '#4d4d4d', fontWeight: 700, textTransform: 'uppercase', letterSpacing: '1.4px' }}>
+                {isPaused ? '일시정지됨' : '마이크 입력 중'}
+              </span>
+            </div>
+
+            {/* Keywords section */}
+            <div style={{ background: '#181818', borderRadius: 10, padding: '16px 18px', border: '1px solid #2a2a2a' }}>
+              <div style={{
+                fontSize: 10, fontWeight: 700, color: '#b3b3b3',
+                textTransform: 'uppercase', letterSpacing: '2px', marginBottom: 12,
+                display: 'flex', alignItems: 'center', gap: 5,
+              }}>
+                <div style={{ width: 5, height: 5, borderRadius: '50%', background: '#539df5' }} />
+                실시간 키워드
               </div>
-            )}
-            {utterances.map((u) => {
-              const idx = getSpeakerIdx(u.speaker)
-              return (
-                <div key={u.id} style={{ display: 'flex', flexDirection: 'column', gap: 5 }}>
-                  <div style={{ display: 'flex', alignItems: 'center', gap: 8 }}>
-                    <div style={{
-                      width: 26, height: 26, borderRadius: '50%', flexShrink: 0,
-                      background: SPEAKER_BG[idx], color: SPEAKER_COLORS[idx],
-                      display: 'flex', alignItems: 'center', justifyContent: 'center',
-                      fontSize: 10, fontWeight: 700,
-                    }}>{u.speakerName[0]}</div>
-                    <span style={{ fontSize: 12, fontWeight: 700, color: '#b3b3b3' }}>{u.speakerName}</span>
-                    <span style={{ fontSize: 10, color: '#4d4d4d', marginLeft: 'auto' }}>{u.timestamp}</span>
-                  </div>
-                  <div style={{
-                    marginLeft: 34, fontSize: 13, color: u.isFinal ? '#cbcbcb' : '#888',
-                    lineHeight: 1.6, background: '#181818',
-                    borderRadius: '0 6px 6px 6px',
-                    padding: '10px 14px',
-                    borderLeft: !u.isFinal ? '2px solid #1ed760' : 'none',
-                  }}>
-                    {u.text}
-                    {!u.isFinal && <span style={{
-                      display: 'inline-block', width: 2, height: 12,
-                      background: '#1ed760', borderRadius: 1,
-                      verticalAlign: 'middle', marginLeft: 2,
-                      animation: 'blink .65s step-end infinite',
-                    }} />}
-                  </div>
+              {keywords.length === 0 ? (
+                <div style={{ fontSize: 12, color: '#4d4d4d', lineHeight: 1.6 }}>
+                  45초마다 회의 키워드를 추출해요...
                 </div>
-              )
-            })}
+              ) : (
+                <div style={{ display: 'flex', flexWrap: 'wrap', gap: 8 }}>
+                  {keywords.map((kw, idx) => (
+                    <span
+                      key={`${kw}-${idx}`}
+                      style={{
+                        fontSize: 12, fontWeight: 700,
+                        padding: '4px 12px', borderRadius: 9999,
+                        background: '#1a2a3a', color: '#539df5',
+                        border: '1px solid #1a3a5a',
+                      }}
+                    >
+                      {kw}
+                    </span>
+                  ))}
+                </div>
+              )}
+            </div>
+
+            {/* Info text */}
+            <div style={{
+              padding: '14px 16px', borderRadius: 8,
+              background: '#141414', border: '1px solid #2a2a2a',
+              borderLeft: '3px solid #1ed760',
+            }}>
+              <div style={{ fontSize: 12, color: '#b3b3b3', lineHeight: 1.7 }}>
+                녹음 종료 후 AI가 전체 내용을 전사하고 회의록을 작성합니다.
+              </div>
+            </div>
           </div>
 
           {/* 마이크 선택 바 (2개 이상 마이크 감지 시 표시) */}
@@ -488,7 +616,7 @@ export default function RecordingScreen() {
             </div>
           )}
 
-          {/* VU 미터 + 게인 컨트롤 */}
+          {/* VU 미터 + 게인 컨트롤 (하단 바) */}
           <div style={{
             padding: '8px 18px', borderTop: '1px solid #2a2a2a',
             background: '#181818', display: 'flex', alignItems: 'center', gap: 10,
@@ -500,24 +628,24 @@ export default function RecordingScreen() {
               <path d="M19 10v2a7 7 0 0 1-14 0v-2M12 19v3"/>
             </svg>
 
-            {/* 실시간 VU 미터 */}
-            <div style={{ flex: 1, height: 28, display: 'flex', alignItems: 'center', gap: 1.5 }}>
-              {volumeBars.map((h, i) => {
-                // 볼륨 높이에 따라 초록 → 노랑 → 빨강 그라디언트
+            {/* 미니 VU 미터 */}
+            <div style={{ flex: 1, height: 28, display: 'flex', alignItems: 'center', gap: 2 }}>
+              {volumeBars.filter((_, i) => i % 2 === 0).map((h, i) => {
                 const ratio = h / 26
                 const color = isPaused ? '#2a2a2a'
-                  : ratio > 0.85 ? '#f3727f'   // 클리핑 위험
-                  : ratio > 0.60 ? '#ffa42b'   // 높음
-                  : '#1ed760'                  // 정상
+                  : ratio > 0.85 ? '#f3727f'
+                  : ratio > 0.65 ? '#ffa42b'
+                  : ratio > 0.28 ? '#1ed760'
+                  : '#3d8fd4'
                 return (
                   <div
                     key={i}
                     style={{
-                      width: 3, borderRadius: 2,
+                      width: 2, borderRadius: 1,
                       height: `${h}px`,
                       background: color,
-                      opacity: isPaused ? 0.3 : 0.9,
-                      transition: isPaused ? 'none' : 'height 60ms ease-out',
+                      opacity: isPaused ? 0.3 : Math.max(0.4, ratio),
+                      transition: isPaused ? 'none' : 'height 55ms ease-out',
                     }}
                   />
                 )
@@ -575,8 +703,8 @@ export default function RecordingScreen() {
             {activeTab === 'summary' && (
               <>
                 {[
-                  { label: '실시간 분석', dot: true, text: utterances.length > 0 ? '회의 내용을 분석하고 있어요...' : '발언이 감지되면 실시간으로 요약해드려요.' },
-                  { label: '발언 통계', dot: false, text: `총 ${utterances.filter(u => u.isFinal).length}개 문장 · ${totalWords} 단어` },
+                  { label: 'AI 전사', dot: true, text: '녹음 종료 후 Gemini가 전체 내용을 전사하고 회의록을 작성합니다.' },
+                  { label: '발언 통계', dot: false, text: `경과 시간: ${formatTime(elapsedSeconds)}` },
                 ].map((card) => (
                   <div key={card.label} style={{ background: '#1f1f1f', borderRadius: 6, padding: 12, marginBottom: 10 }}>
                     <div style={{ fontSize: 10, fontWeight: 700, color: '#b3b3b3', textTransform: 'uppercase', letterSpacing: '2px', marginBottom: 7, display: 'flex', alignItems: 'center', gap: 5 }}>
@@ -591,7 +719,7 @@ export default function RecordingScreen() {
 
             {activeTab === 'speakers' && (
               Object.entries(speakerStats).length === 0 ? (
-                <div style={{ fontSize: 12, color: '#b3b3b3', lineHeight: 1.6 }}>발언이 감지되면 발언자별 통계가 표시돼요.</div>
+                <div style={{ fontSize: 12, color: '#b3b3b3', lineHeight: 1.6 }}>녹음 종료 후 발언자별 통계가 표시됩니다.</div>
               ) : (
                 Object.entries(speakerStats).map(([speaker, words]) => {
                   const idx = getSpeakerIdx(speaker)
@@ -616,7 +744,7 @@ export default function RecordingScreen() {
               <div style={{ fontSize: 12, color: '#b3b3b3', lineHeight: 1.6 }}>
                 <div style={{ fontSize: 10, fontWeight: 700, color: '#b3b3b3', textTransform: 'uppercase', letterSpacing: '2px', marginBottom: 10, display: 'flex', alignItems: 'center', gap: 5 }}>
                   <div style={{ width: 5, height: 5, borderRadius: '50%', background: '#f3727f', animation: 'pulse 1.2s ease-in-out infinite' }} />
-                  실시간 감지
+                  AI 분석 대기
                 </div>
                 회의 종료 후 AI가 액션 아이템을 정리해드려요.
               </div>
@@ -628,6 +756,7 @@ export default function RecordingScreen() {
 
       <style>{`
         @keyframes pulse { 0%,100%{opacity:1} 50%{opacity:.3} }
+        @keyframes pulseRing { 0%,100%{opacity:.055} 50%{opacity:.02} }
         @keyframes wave { 0%{height:4px} 100%{height:var(--h,18px)} }
         @keyframes blink { 0%,100%{opacity:1} 50%{opacity:0} }
         @keyframes spin { to{transform:rotate(360deg)} }
