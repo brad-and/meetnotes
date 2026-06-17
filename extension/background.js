@@ -49,7 +49,7 @@ chrome.runtime.onMessage.addListener((msg, _sender, sendResponse) => {
       if (!tab) tab = await openMeetNotesTab()
 
       await chrome.tabs.update(tab.id, { active: true })
-      await sendToTab(tab.id, { type: 'START_RECORDING', title: msg.title })
+      await sendToTab(tab.id, { type: 'START_RECORDING', title: msg.title, attendees: msg.attendees ?? [] })
 
       await chrome.storage.session.set({
         isRecording: true, isStopping: false, isDone: false,

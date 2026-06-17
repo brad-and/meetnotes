@@ -89,12 +89,12 @@ function renderCalendar(events) {
       $inputTitle.focus()
     })
 
-    // 녹음 버튼 클릭 → 즉시 녹음 시작
+    // 녹음 버튼 클릭 → 즉시 녹음 시작 (제목 + 참석자 전달)
     const recBtn = item.querySelector('.cal-rec-btn')
     if (recBtn) {
       recBtn.addEventListener('click', (e) => {
         e.stopPropagation()
-        startRecording(event.title)
+        startRecording(event.title, event.attendees || [])
       })
     }
 
@@ -103,8 +103,8 @@ function renderCalendar(events) {
 }
 
 // ── 녹음 시작 ─────────────────────────────────────────────────────────────
-async function startRecording(title) {
-  const res = await chrome.runtime.sendMessage({ type: 'START_RECORDING', title })
+async function startRecording(title, attendees = []) {
+  const res = await chrome.runtime.sendMessage({ type: 'START_RECORDING', title, attendees })
 
   if (!res?.ok) {
     $errorMsg.textContent = res?.error || '앱 연결 실패. 설정에서 URL을 확인하세요.'
