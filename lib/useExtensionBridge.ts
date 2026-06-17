@@ -11,12 +11,18 @@ const PALETTE = [
 
 type RawAttendee = { email: string; status?: string } | string
 
+function toName(a: RawAttendee): string {
+  const email = typeof a === 'string' ? a : a.email
+  return email.split('@')[0]
+}
+
 function buildExtraParticipants(attendees: RawAttendee[]): Participant[] {
-  return attendees.map((a, i) => {
-    const name = typeof a === 'string' ? a : a.email.split('@')[0]
-    const { color, bgColor } = PALETTE[i % PALETTE.length]
-    return { id: String(i + 2), name, color, bgColor }
-  })
+  return attendees.map((a, i) => ({
+    id: String(i + 2),
+    name: toName(a),
+    color: PALETTE[i % PALETTE.length].color,
+    bgColor: PALETTE[i % PALETTE.length].bgColor,
+  }))
 }
 
 function postToExtension(data: object) {
@@ -24,36 +30,33 @@ function postToExtension(data: object) {
 }
 
 export function useExtensionBridge() {
-  const { resetMeeting, setTitle, setStep, addParticipant, step, isRecording, title } =
-    useMeetingStore()
+  const {
+    selectEventFromExt,
+    startRecordingFromExt,
+    step,
+    isRecording,
+    title,
+  } = useMeetingStore()
 
   useEffect(() => {
     function handleMessage(event: MessageEvent) {
       if (event.data?.source !== 'meetnotes-ext') return
       const { type, title: evtTitle, attendees: evtAttendees } = event.data
+      const extra = buildExtraParticipants(
+        Array.isArray(evtAttendees) ? evtAttendees : []
+      )
 
-      // ── 1단계: 일정 선택 → SetupScreen에 제목 + 참여자 자동 입력 ──────
+      // 1단계: 일정 선택 → SetupScreen 제목 + 참여자 자동 입력
       if (type === 'SELECT_EVENT') {
-        resetMeeting()
-        if (evtTitle) setTitle(evtTitle)
-        if (Array.isArray(evtAttendees) && evtAttendees.length > 0) {
-          buildExtraParticipants(evtAttendees).forEach((p) => addParticipant(p))
-        }
+        selectEventFromExt(evtTitle ?? '', extra)
       }
 
-      // ── 2단계: 녹음 시작 버튼 → RecordingScreen으로 이동 ───────────────
+      // 2단계: 녹음 시작 → RecordingScreen으로 이동
       if (type === 'START_RECORDING') {
-        if (evtTitle) {
-          resetMeeting()
-          setTitle(evtTitle)
-          if (Array.isArray(evtAttendees) && evtAttendees.length > 0) {
-            buildExtraParticipants(evtAttendees).forEach((p) => addParticipant(p))
-          }
-        }
-        setStep('recording')
+        startRecordingFromExt(evtTitle ?? '', extra)
       }
 
-      // ── 종료 트리거 ─────────────────────────────────────────────────────
+      // 종료 트리거
       if (type === 'STOP_RECORDING') {
         window.dispatchEvent(new CustomEvent('ext:stop-recording'))
       }
@@ -61,7 +64,7 @@ export function useExtensionBridge() {
 
     window.addEventListener('message', handleMessage)
     return () => window.removeEventListener('message', handleMessage)
-  }, [resetMeeting, setTitle, setStep, addParticipant])
+  }, [selectEventFromExt, startRecordingFromExt])
 
   // 웹앱 상태 → 익스텐션 전달
   useEffect(() => {

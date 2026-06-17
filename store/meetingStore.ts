@@ -117,6 +117,9 @@ interface MeetingStore {
 
   // Reset
   resetMeeting: () => void
+  // 익스텐션 → 웹앱: 일정 선택 (1단계) / 녹음 시작 (2단계) 원자적 처리
+  selectEventFromExt: (title: string, extraParticipants: Participant[]) => void
+  startRecordingFromExt: (title: string, extraParticipants: Participant[]) => void
 
   // History (Supabase)
   meetingHistory: MeetingRecord[]
@@ -215,6 +218,62 @@ export const useMeetingStore = create<MeetingStore>((set, get) => ({
   setAudioMimeType: (audioMimeType) => set({ audioMimeType }),
   currentMeetingId: null,
   setCurrentMeetingId: (currentMeetingId) => set({ currentMeetingId }),
+
+  selectEventFromExt: (title, extraParticipants) =>
+    set({
+      step: 'setup',
+      title,
+      meetingType: 'face',
+      recordingMode: 'standard',
+      participants: [
+        { id: '1', name: '나 (진행자)', color: '#1ed760', bgColor: '#1a3a1a' },
+        ...extraParticipants,
+      ],
+      isRecording: false,
+      isPaused: false,
+      elapsedSeconds: 0,
+      utterances: [],
+      speakerMap: {},
+      keywords: [],
+      isAnalyzing: false,
+      minutes: null,
+      analysisError: null,
+      audioUrl: null,
+      audioMimeType: 'audio/webm',
+      currentMeetingId: null,
+      slackFormat: 'full',
+      slackOptions: { thread: false, mention: true, transcript: false, save: true },
+      isSending: false,
+      sent: false,
+    }),
+
+  startRecordingFromExt: (title, extraParticipants) =>
+    set({
+      step: 'recording',
+      title,
+      meetingType: 'face',
+      recordingMode: 'standard',
+      participants: [
+        { id: '1', name: '나 (진행자)', color: '#1ed760', bgColor: '#1a3a1a' },
+        ...extraParticipants,
+      ],
+      isRecording: false,
+      isPaused: false,
+      elapsedSeconds: 0,
+      utterances: [],
+      speakerMap: {},
+      keywords: [],
+      isAnalyzing: false,
+      minutes: null,
+      analysisError: null,
+      audioUrl: null,
+      audioMimeType: 'audio/webm',
+      currentMeetingId: null,
+      slackFormat: 'full',
+      slackOptions: { thread: false, mention: true, transcript: false, save: true },
+      isSending: false,
+      sent: false,
+    }),
 
   resetMeeting: () =>
     set({
