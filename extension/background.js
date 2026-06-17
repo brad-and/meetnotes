@@ -237,7 +237,7 @@ chrome.runtime.onMessage.addListener((msg, _sender, sendResponse) => {
       }
       if (event.type === 'ANALYSIS_DONE') {
         await chrome.storage.session.set({
-          isStopping: false, isDone: true,
+          isRecording: false, isStopping: false, isDone: true,
           result: event.result ?? null, error: event.error ?? null,
         })
       }
