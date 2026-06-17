@@ -11,6 +11,11 @@ const $calendarList  = document.getElementById('calendar-list')
 // 현재 선택된 캘린더 이벤트 참석자 보관
 let selectedAttendees = []
 
+// ── Helpers ───────────────────────────────────────────────────────────────
+const localGet   = (k) => new Promise((r) => chrome.storage.local.get(k, r))
+const sessionGet = (k) => new Promise((r) => chrome.storage.session.get(k, r))
+const escHtml    = (s) => s.replace(/&/g, '&amp;').replace(/</g, '&lt;').replace(/>/g, '&gt;')
+
 function show(id) {
   ;['screen-idle', 'screen-recording', 'screen-error'].forEach((s) => {
     document.getElementById(s).style.display = s === id ? '' : 'none'
@@ -178,8 +183,3 @@ document.getElementById('btn-save-url').addEventListener('click', async () => {
   $settingsPanel.style.display = 'none'
   loadCalendar()
 })
-
-// ── Helpers ───────────────────────────────────────────────────────────────
-const localGet   = (k) => new Promise((r) => chrome.storage.local.get(k, r))
-const sessionGet = (k) => new Promise((r) => chrome.storage.session.get(k, r))
-const escHtml    = (s) => s.replace(/&/g, '&amp;').replace(/</g, '&lt;').replace(/>/g, '&gt;')
