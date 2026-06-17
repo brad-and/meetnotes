@@ -30,26 +30,24 @@ export function useExtensionBridge() {
   useEffect(() => {
     function handleMessage(event: MessageEvent) {
       if (event.data?.source !== 'meetnotes-ext') return
-      const { type, payload } = event.data
+      const { type, title: evtTitle, attendees: evtAttendees } = event.data
 
       // ── 1단계: 일정 선택 → SetupScreen에 제목 + 참여자 자동 입력 ──────
       if (type === 'SELECT_EVENT') {
-        resetMeeting() // step이 'setup'으로 돌아오고 참여자 초기화
-        if (payload?.title) setTitle(payload.title)
-        if (Array.isArray(payload?.attendees) && payload.attendees.length > 0) {
-          buildExtraParticipants(payload.attendees).forEach((p) => addParticipant(p))
+        resetMeeting()
+        if (evtTitle) setTitle(evtTitle)
+        if (Array.isArray(evtAttendees) && evtAttendees.length > 0) {
+          buildExtraParticipants(evtAttendees).forEach((p) => addParticipant(p))
         }
-        // resetMeeting이 이미 step: 'setup'으로 세팅하므로 별도 setStep 불필요
       }
 
       // ── 2단계: 녹음 시작 버튼 → RecordingScreen으로 이동 ───────────────
       if (type === 'START_RECORDING') {
-        // SELECT_EVENT 없이 직접 시작한 경우 제목 + 참여자 세팅
-        if (payload?.title) {
+        if (evtTitle) {
           resetMeeting()
-          setTitle(payload.title)
-          if (Array.isArray(payload?.attendees) && payload.attendees.length > 0) {
-            buildExtraParticipants(payload.attendees).forEach((p) => addParticipant(p))
+          setTitle(evtTitle)
+          if (Array.isArray(evtAttendees) && evtAttendees.length > 0) {
+            buildExtraParticipants(evtAttendees).forEach((p) => addParticipant(p))
           }
         }
         setStep('recording')
