@@ -1,6 +1,7 @@
 import { create } from 'zustand'
 
 export type MeetingType = 'face' | 'online'
+export type RecordingMode = 'standard' | 'realtime'
 export type AppStep = 'setup' | 'recording' | 'review' | 'slack' | 'history'
 
 export interface Participant {
@@ -73,6 +74,8 @@ interface MeetingStore {
   setTitle: (t: string) => void
   meetingType: MeetingType
   setMeetingType: (t: MeetingType) => void
+  recordingMode: RecordingMode
+  setRecordingMode: (m: RecordingMode) => void
   participants: Participant[]
   addParticipant: (p: Participant) => void
   removeParticipant: (id: string) => void
@@ -152,6 +155,8 @@ export const useMeetingStore = create<MeetingStore>((set, get) => ({
   setTitle: (title) => set({ title }),
   meetingType: 'face',
   setMeetingType: (meetingType) => set({ meetingType }),
+  recordingMode: 'standard',
+  setRecordingMode: (recordingMode) => set({ recordingMode }),
   participants: [
     { id: '1', name: '나 (진행자)', color: '#1ed760', bgColor: '#1a3a1a' },
   ],
@@ -216,6 +221,7 @@ export const useMeetingStore = create<MeetingStore>((set, get) => ({
       step: 'setup',
       title: '',
       meetingType: 'face',
+      recordingMode: 'standard',
       participants: [{ id: '1', name: '나 (진행자)', color: '#1ed760', bgColor: '#1a3a1a' }],
       isRecording: false,
       isPaused: false,

@@ -26,6 +26,30 @@ const SPEECH_CONFIRM     = 3    // 연속 3번(600ms) 이상 감지돼야 발화
 const MIN_SPEECH_FRAMES  = 2    // 키워드 전송 시 최소 발화 프레임(×200ms = 400ms)
 const KEYWORD_INTERVAL_MS = 20000 // 20초마다 키워드 추출
 
+type StartRecordingOptions = {
+  realtimeTranscript?: boolean
+  realtimeKeywords?: boolean
+}
+
+type DeepgramMessage = {
+  type?: string
+  is_final?: boolean
+  speech_final?: boolean
+  channel?: {
+    alternatives?: Array<{
+      transcript?: string
+      words?: Array<{ speaker?: number }>
+    }>
+  }
+}
+
+function formatTimestamp(s: number) {
+  const h = Math.floor(s / 3600).toString().padStart(2, '0')
+  const m = Math.floor((s % 3600) / 60).toString().padStart(2, '0')
+  const sec = (s % 60).toString().padStart(2, '0')
+  return `${h}:${m}:${sec}`
+}
+
 export function useDeepgram() {
   const mediaRecorderRef    = useRef<MediaRecorder | null>(null)
   const streamRef           = useRef<MediaStream | null>(null)
@@ -43,6 +67,12 @@ export function useDeepgram() {
 
   // 키워드 추출 인터벌
   const keywordIntervalRef  = useRef<NodeJS.Timeout | null>(null)
+  const wsRef               = useRef<WebSocket | null>(null)
+  const realtimeRef         = useRef<boolean>(false)
+  const realtimeKeywordsRef = useRef<boolean>(false)
+  const pendingWsChunksRef  = useRef<Blob[]>([])
+  const pendingIdRef        = useRef<string | null>(null)
+  const utteranceEndedRef   = useRef<boolean>(false)
 
   // Web Audio API 처리 체인
   const audioCtxRef         = useRef<AudioContext | null>(null)
@@ -54,6 +84,97 @@ export function useDeepgram() {
   const recordingGenRef     = useRef(0)
 
   const { setRecording, setPaused, setElapsedSeconds } = useMeetingStore()
+
+  const handleDeepgramMessage = useCallback((msg: DeepgramMessage) => {
+    const store = useMeetingStore.getState()
+    const ts = formatTimestamp(store.elapsedSeconds)
+
+    if (msg.type === 'UtteranceEnd') {
+      if (pendingIdRef.current !== null) {
+        const pending = store.utterances.find((u) => u.id === pendingIdRef.current)
+        store.finalizeLastUtterance(pending?.text ?? '')
+        pendingIdRef.current = null
+        utteranceEndedRef.current = true
+      }
+      return
+    }
+
+    const alt = msg.channel?.alternatives?.[0]
+    if (!alt) return
+    const transcript = alt.transcript?.trim()
+    if (!transcript) return
+
+    const speaker = `Speaker ${alt.words?.[0]?.speaker ?? 0}`
+    const speakerName = store.speakerMap[speaker] || speaker
+    const isSpeechFinal = msg.speech_final === true
+
+    if (isSpeechFinal) {
+      if (pendingIdRef.current !== null) {
+        store.finalizeLastUtterance(transcript)
+        pendingIdRef.current = null
+        utteranceEndedRef.current = false
+      } else if (utteranceEndedRef.current) {
+        utteranceEndedRef.current = false
+      } else {
+        store.addUtterance({ id: `sf-${Date.now()}`, speaker, speakerName, text: transcript, timestamp: ts, isFinal: true })
+      }
+      return
+    }
+
+    utteranceEndedRef.current = false
+    if (pendingIdRef.current !== null) {
+      store.updateLastUtterance(transcript)
+      return
+    }
+
+    const id = `${msg.is_final ? 'final' : 'interim'}-${Date.now()}`
+    pendingIdRef.current = id
+    store.addUtterance({ id, speaker, speakerName, text: transcript, timestamp: ts, isFinal: false })
+  }, [])
+
+  const startDeepgramSocket = useCallback(async () => {
+    try {
+      const tokenRes = await fetch('/api/transcribe/token')
+      const { token, error } = await tokenRes.json()
+      if (!token || error) throw new Error(error || 'Deepgram token missing')
+
+      const params = new URLSearchParams({
+        model: 'nova-2',
+        language: 'ko',
+        smart_format: 'true',
+        interim_results: 'true',
+        diarize: 'true',
+        vad_events: 'true',
+        utterance_end_ms: '1500',
+        endpointing: '380',
+      })
+      const ws = new WebSocket(`wss://api.deepgram.com/v1/listen?${params.toString()}`, ['token', token])
+      wsRef.current = ws
+      pendingIdRef.current = null
+      utteranceEndedRef.current = false
+
+      ws.onopen = () => {
+        const pending = [...pendingWsChunksRef.current]
+        pendingWsChunksRef.current = []
+        for (const chunk of pending) {
+          if (ws.readyState === WebSocket.OPEN) ws.send(chunk)
+        }
+      }
+      ws.onmessage = (event) => {
+        try {
+          handleDeepgramMessage(JSON.parse(event.data))
+        } catch (err) {
+          console.warn('[Deepgram] message parse failed:', err)
+        }
+      }
+      ws.onerror = (event) => console.error('[Deepgram] websocket error:', event)
+      ws.onclose = () => {
+        if (wsRef.current === ws) wsRef.current = null
+      }
+    } catch (err) {
+      console.error('[Deepgram] realtime transcript disabled:', err)
+    }
+  }, [handleDeepgramMessage])
 
   /** 현재 마이크 볼륨 레벨 반환 (0-100) */
   const getVolumeLevel = useCallback((): number => {
@@ -154,9 +275,11 @@ export function useDeepgram() {
     }, 200)
   }, [getVolumeLevel])
 
-  const startRecording = useCallback(async (deviceId?: string) => {
+  const startRecording = useCallback(async (deviceId?: string, options: StartRecordingOptions = {}) => {
     const gen = ++recordingGenRef.current
     if (deviceId !== undefined) deviceIdRef.current = deviceId
+    realtimeRef.current = options.realtimeTranscript === true
+    realtimeKeywordsRef.current = options.realtimeKeywords === true
 
     try {
       // ── 1. 향상된 오디오 제약 ─────────────────────────────────────────────
@@ -233,12 +356,22 @@ export function useDeepgram() {
       const mediaRecorder = new MediaRecorder(recordingStream, { mimeType })
       mediaRecorderRef.current = mediaRecorder
 
+      if (realtimeRef.current) {
+        startDeepgramSocket()
+      }
+
       mediaRecorder.onerror = (e) => console.error('[MediaRecorder] error:', e)
       mediaRecorder.ondataavailable = (e) => {
         if (e.data.size > 0) {
           audioChunksRef.current.push(e.data)
           batchChunksRef.current.push(e.data)
           if (!initChunkRef.current) initChunkRef.current = e.data
+          const ws = wsRef.current
+          if (realtimeRef.current && ws?.readyState === WebSocket.OPEN) {
+            ws.send(e.data)
+          } else if (realtimeRef.current) {
+            pendingWsChunksRef.current.push(e.data)
+          }
         }
       }
 
@@ -248,9 +381,11 @@ export function useDeepgram() {
       startVolSampler()
 
       // ── 5. 45초 키워드 추출 인터벌 ────────────────────────────────────────
-      keywordIntervalRef.current = setInterval(() => {
-        sendKeywords()
-      }, KEYWORD_INTERVAL_MS)
+      if (realtimeKeywordsRef.current) {
+        keywordIntervalRef.current = setInterval(() => {
+          sendKeywords()
+        }, KEYWORD_INTERVAL_MS)
+      }
 
       // 타이머
       let sec = 0
@@ -264,7 +399,7 @@ export function useDeepgram() {
       console.error('Recording error:', err)
       alert('마이크 권한이 필요해요. 브라우저 설정에서 허용해주세요.')
     }
-  }, [setRecording, setElapsedSeconds, sendKeywords, startVolSampler])
+  }, [setRecording, setElapsedSeconds, sendKeywords, startDeepgramSocket, startVolSampler])
 
   const pauseRecording = useCallback(() => {
     if (mediaRecorderRef.current?.state === 'recording') {
@@ -293,10 +428,11 @@ export function useDeepgram() {
 
       startVolSampler()
 
-      // 재개 시 키워드 인터벌 재시작
-      keywordIntervalRef.current = setInterval(() => {
-        sendKeywords()
-      }, KEYWORD_INTERVAL_MS)
+      if (realtimeKeywordsRef.current) {
+        keywordIntervalRef.current = setInterval(() => {
+          sendKeywords()
+        }, KEYWORD_INTERVAL_MS)
+      }
 
       setPaused(false)
     }
@@ -306,6 +442,11 @@ export function useDeepgram() {
     recordingGenRef.current++
     if (volSamplerRef.current) clearInterval(volSamplerRef.current)
     if (keywordIntervalRef.current) clearInterval(keywordIntervalRef.current)
+    if (wsRef.current) {
+      wsRef.current.close()
+      wsRef.current = null
+    }
+    pendingWsChunksRef.current = []
     mediaRecorderRef.current?.stop()
     streamRef.current?.getTracks().forEach((t) => t.stop())
     audioCtxRef.current?.close().catch(() => {})

@@ -6,7 +6,7 @@ import type { CalendarEvent } from '@/app/api/calendar/events/route'
 
 export default function SetupScreen() {
   const {
-    title, setTitle, meetingType, setMeetingType,
+    title, setTitle, meetingType, setMeetingType, recordingMode, setRecordingMode,
     participants, addParticipant, removeParticipant, updateParticipantName,
     slackChannel, setSlackChannel, aiOptions, toggleAiOption, setStep, meetingHistory, resetMeeting,
     setSpeakerName,
@@ -35,7 +35,10 @@ export default function SetupScreen() {
   const [gscriptSaved, setGscriptSaved] = useState(false)
   const [hostEmail, setHostEmail] = useState('')
 
-  useEffect(() => { setMounted(true) }, [])
+  useEffect(() => {
+    const frame = requestAnimationFrame(() => setMounted(true))
+    return () => cancelAnimationFrame(frame)
+  }, [])
 
   // 서버 설정 파일에서 Apps Script URL 로드 (localStorage는 fallback)
   useEffect(() => {
@@ -59,7 +62,7 @@ export default function SetupScreen() {
         const saved = localStorage.getItem('calGScriptUrl')
         if (saved) setGscriptUrl(saved)
       })
-  }, [])
+  }, [setSpeakerName, updateParticipantName])
 
   // 캘린더 설정 여부 확인 + 이벤트 자동 로드
   useEffect(() => {
@@ -264,7 +267,7 @@ export default function SetupScreen() {
         </div>
       </Topbar>
 
-      <div style={{ maxWidth: 960, margin: '0 auto', padding: '32px 24px 60px' }}>
+      <div style={{ maxWidth: 1280, margin: '0 auto', padding: '32px 24px 60px' }}>
         <h1 style={{ fontSize: 24, fontWeight: 700, color: '#fff', marginBottom: 4 }}>새 회의 시작</h1>
         <p style={{ fontSize: 14, color: '#b3b3b3', marginBottom: 28 }}>
           회의 정보를 입력하면 AI가 자동으로 회의록을 작성해드려요.
@@ -495,6 +498,51 @@ export default function SetupScreen() {
               ))}
             </div>
           </div>
+
+          {meetingType === 'face' && (
+            <div style={{ marginTop: 20 }}>
+              <label className="sp-label">녹음 방식</label>
+              <div style={{ display: 'grid', gridTemplateColumns: '1fr 1fr', gap: 10 }}>
+                {[
+                  {
+                    key: 'standard',
+                    icon: '●',
+                    title: '표준 녹음',
+                    desc: '녹음 안정성 우선\n종료 후 AI 전사·회의록 작성',
+                  },
+                  {
+                    key: 'realtime',
+                    icon: '▣',
+                    title: '실시간 대사',
+                    desc: 'Deepgram으로 발화 표시\n종료 후 대사 기반 회의록 작성',
+                  },
+                ].map((m) => (
+                  <div
+                    key={m.key}
+                    onClick={() => setRecordingMode(m.key as 'standard' | 'realtime')}
+                    style={{
+                      background: recordingMode === m.key ? '#1a3a1a' : '#1f1f1f',
+                      border: `1px solid ${recordingMode === m.key ? '#1ed760' : 'transparent'}`,
+                      borderRadius: 8, padding: 16, cursor: 'pointer', transition: 'all .15s',
+                    }}
+                  >
+                    <div style={{
+                      width: 32, height: 32, borderRadius: 8,
+                      background: recordingMode === m.key ? '#0d2a0d' : '#2a2a2a',
+                      color: recordingMode === m.key ? '#1ed760' : '#b3b3b3',
+                      display: 'flex', alignItems: 'center', justifyContent: 'center',
+                      fontSize: 14, marginBottom: 10, fontWeight: 700,
+                    }}>{m.icon}</div>
+                    <div style={{ fontSize: 14, fontWeight: 700, color: recordingMode === m.key ? '#1ed760' : '#fff', marginBottom: 4 }}>{m.title}</div>
+                    <div style={{ fontSize: 12, color: '#b3b3b3', lineHeight: 1.5, whiteSpace: 'pre-line' }}>{m.desc}</div>
+                  </div>
+                ))}
+              </div>
+              <p style={{ fontSize: 12, color: '#b3b3b3', marginTop: 6 }}>
+                중요한 회의는 실시간 대사, 네트워크가 불안정한 환경은 표준 녹음을 권장합니다.
+              </p>
+            </div>
+          )}
         </div>
 
         {/* Participants */}
@@ -667,6 +715,7 @@ export default function SetupScreen() {
                 className={`sp-toggle ${aiOptions[opt.key as keyof typeof aiOptions] ? 'on' : ''}`}
                 onClick={() => toggleAiOption(opt.key as keyof typeof aiOptions)}
                 role="switch"
+                aria-checked={aiOptions[opt.key as keyof typeof aiOptions]}
               >
                 <div className="sp-toggle-thumb" />
               </div>

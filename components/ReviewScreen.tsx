@@ -221,14 +221,17 @@ export default function ReviewScreen() {
   }
 
   useEffect(() => {
-    if (!minutes) { setLocalMinutes(null); return }
-    // store에 저장된 값도 배열일 수 있으므로 정규화
-    const toStr = (v: unknown): string => {
-      if (typeof v === 'string') return v
-      if (Array.isArray(v)) return (v as string[]).join('\n')
-      return String(v ?? '')
-    }
-    setLocalMinutes({ ...minutes, detail: toStr(minutes.detail), core: toStr(minutes.core) })
+    const frame = requestAnimationFrame(() => {
+      if (!minutes) { setLocalMinutes(null); return }
+      // store에 저장된 값도 배열일 수 있으므로 정규화
+      const toStr = (v: unknown): string => {
+        if (typeof v === 'string') return v
+        if (Array.isArray(v)) return (v as string[]).join('\n')
+        return String(v ?? '')
+      }
+      setLocalMinutes({ ...minutes, detail: toStr(minutes.detail), core: toStr(minutes.core) })
+    })
+    return () => cancelAnimationFrame(frame)
   }, [minutes])
 
   const updateMinutes = (updates: Partial<typeof minutes>) => {
@@ -363,7 +366,7 @@ export default function ReviewScreen() {
         </div>
       </Topbar>
 
-      <div style={{ maxWidth: 960, margin: '0 auto', display: 'grid', gridTemplateColumns: '1fr 252px', minHeight: 'calc(100vh - 96px)' }}>
+      <div style={{ width: '100%', maxWidth: 1280, margin: '0 auto', display: 'grid', gridTemplateColumns: 'minmax(0, 1fr) minmax(360px, 420px)', minHeight: 'calc(100vh - 96px)' }}>
         {/* Main editor */}
         <div style={{ overflowY: 'auto', padding: 24, borderRight: '1px solid #2a2a2a' }}>
           {/* AI Banner — 오류 or 완료 */}
@@ -510,10 +513,23 @@ export default function ReviewScreen() {
         </div>
 
         {/* Sidebar */}
-        <div style={{ background: '#181818', display: 'flex', flexDirection: 'column' }}>
+        <div style={{ background: '#181818', display: 'flex', flexDirection: 'column', minWidth: 0 }}>
           <div style={{ padding: 16, borderBottom: '1px solid #2a2a2a' }}>
             <span className="sp-label">Slack 복사 미리보기</span>
-            <div style={{ background: '#121212', borderRadius: 6, padding: 12, fontSize: 11, color: '#b3b3b3', lineHeight: 1.8, fontFamily: 'monospace', whiteSpace: 'pre-wrap' }}>
+            <div style={{
+              background: '#121212',
+              borderRadius: 6,
+              padding: 16,
+              fontSize: 12,
+              color: '#d1d1d1',
+              lineHeight: 1.8,
+              fontFamily: 'monospace',
+              whiteSpace: 'pre-wrap',
+              overflowWrap: 'anywhere',
+              wordBreak: 'break-word',
+              maxHeight: 'calc(100vh - 260px)',
+              overflowY: 'auto',
+            }}>
               {slackPreview}
             </div>
             <button

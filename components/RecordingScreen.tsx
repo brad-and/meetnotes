@@ -140,11 +140,11 @@ export default function RecordingScreen() {
   const {
     isPaused, elapsedSeconds, utterances, participants,
     isRecording, setStep, setAnalyzing, setMinutes, title, addToHistory,
-    meetingType, addUtterance, setElapsedSeconds, speakerMap, setSpeakerName,
+    meetingType, recordingMode, addUtterance, setElapsedSeconds, speakerMap, setSpeakerName,
     setAudioUrl, setAudioMimeType, setCurrentMeetingId, setAnalysisError,
     keywords,
   } = useMeetingStore()
-  const { startRecording, pauseRecording, resumeRecording, stopRecording, getAudioBlob, getAudioMimeType, setGain, getVolumeLevel, gainLevelRef } = useDeepgram()
+  const { startRecording, pauseRecording, resumeRecording, stopRecording, getAudioBlob, getAudioMimeType, setGain, getVolumeLevel } = useDeepgram()
   const [activeTab, setActiveTab] = useState<'summary' | 'speakers' | 'actions'>('summary')
 
   // Online meeting file upload state
@@ -154,7 +154,7 @@ export default function RecordingScreen() {
   const fileInputRef = useRef<HTMLInputElement>(null)
 
   // ── 마이크 감도 & 기기 선택 ────────────────────────────────────────────
-  const [gainLevel, setGainLevel]         = useState<number>(gainLevelRef.current)
+  const [gainLevel, setGainLevel]         = useState<number>(2.0)
   const [micDevices, setMicDevices]       = useState<MediaDeviceInfo[]>([])
   const [selectedMicId, setSelectedMicId] = useState<string>('')
   const [showMicMenu, setShowMicMenu]     = useState(false)
@@ -176,8 +176,8 @@ export default function RecordingScreen() {
   // VU 미터 — requestAnimationFrame 루프
   useEffect(() => {
     if (!isRecording || isPaused) {
-      setVolumeBars(Array(BAR_COUNT).fill(2))
-      return
+      const frame = requestAnimationFrame(() => setVolumeBars(Array(BAR_COUNT).fill(2)))
+      return () => cancelAnimationFrame(frame)
     }
     const animate = () => {
       const level = getVolumeLevel()  // 0-100
@@ -195,15 +195,10 @@ export default function RecordingScreen() {
   }, [isRecording, isPaused, getVolumeLevel])
 
   // 마이크 변경 — 녹음 중이면 재시작
-  const handleMicChange = useCallback(async (deviceId: string) => {
+  const handleMicChange = useCallback((deviceId: string) => {
     setSelectedMicId(deviceId)
     setShowMicMenu(false)
-    if (isRecording) {
-      stopRecording()
-      await new Promise((r) => setTimeout(r, 150))  // 트랙 해제 대기
-      startRecording(deviceId)
-    }
-  }, [isRecording, stopRecording, startRecording])
+  }, [])
 
   // 게인 프리셋 순환
   const cycleGain = useCallback(() => {
@@ -215,10 +210,13 @@ export default function RecordingScreen() {
 
   useEffect(() => {
     if (meetingType === 'face') {
-      startRecording(selectedMicId || undefined)
+      startRecording(selectedMicId || undefined, {
+        realtimeTranscript: recordingMode === 'realtime',
+        realtimeKeywords: recordingMode === 'realtime',
+      })
       return () => stopRecording()
     }
-  }, [meetingType])
+  }, [meetingType, recordingMode, selectedMicId, startRecording, stopRecording])
 
   const handleFileUpload = useCallback(async () => {
     if (!uploadFile) return
@@ -264,7 +262,22 @@ export default function RecordingScreen() {
     try {
       let res: Response
 
-      if (meetingType === 'face' && audioBlob) {
+      const realtimeTranscript = utterances
+        .filter((u) => u.isFinal)
+        .map((u) => `${u.speakerName}: ${u.text}`)
+        .join('\n')
+
+      if (meetingType === 'face' && recordingMode === 'realtime' && realtimeTranscript) {
+        res = await fetch('/api/analyze', {
+          method: 'POST',
+          headers: { 'Content-Type': 'application/json' },
+          body: JSON.stringify({
+            transcript: realtimeTranscript,
+            participants: participants.map((p) => p.name),
+            title,
+          }),
+        })
+      } else if (meetingType === 'face' && audioBlob) {
         const mimeType = getAudioMimeType()
         const form = new FormData()
         form.append('audio', new File([audioBlob], `meeting.${mimeTypeToExt(mimeType)}`, { type: mimeType }))
@@ -293,10 +306,12 @@ export default function RecordingScreen() {
         throw new Error(`분석 API 오류 (${res.status}): ${text}`)
       }
       const data = await res.json()
-      const finalUtterances = data.utterances ?? utterances.filter((u) => u.isFinal)
+      const finalUtterances = Array.isArray(data.utterances) && data.utterances.length > 0
+        ? data.utterances
+        : utterances.filter((u) => u.isFinal)
       if (data.minutes) {
         // audio 전사 결과가 있으면 store에 추가
-        if (data.utterances && Array.isArray(data.utterances)) {
+        if (data.utterances && Array.isArray(data.utterances) && data.utterances.length > 0) {
           for (const u of data.utterances) {
             addUtterance({ ...u, id: `${Date.now()}-${Math.random()}` })
           }
@@ -488,7 +503,7 @@ export default function RecordingScreen() {
       </Topbar>
 
       <div style={{ flex: 1, display: 'flex', justifyContent: 'center', overflow: 'hidden', minHeight: 0 }}>
-      <div style={{ width: '100%', maxWidth: 960, display: 'grid', gridTemplateColumns: '1fr 280px', overflow: 'hidden', minHeight: 0 }}>
+      <div style={{ width: '100%', maxWidth: 1280, display: 'grid', gridTemplateColumns: 'minmax(0, 1fr) minmax(280px, 340px)', overflow: 'hidden', minHeight: 0 }}>
         {/* Left: Recording status panel */}
         <div style={{ display: 'flex', flexDirection: 'column', borderRight: '1px solid #2a2a2a', minHeight: 0, overflow: 'hidden' }}>
           <div style={{
@@ -501,7 +516,7 @@ export default function RecordingScreen() {
                 animation: isPaused ? 'none' : 'pulse 1.2s ease-in-out infinite',
               }} />
               <span style={{ fontSize: 13, fontWeight: 700, textTransform: 'uppercase', letterSpacing: '1.4px' }}>
-                {isPaused ? '일시정지' : '녹음 중'}
+                {isPaused ? '일시정지' : recordingMode === 'realtime' ? '실시간 대사 녹음 중' : '표준 녹음 중'}
               </span>
             </div>
           </div>
@@ -516,38 +531,85 @@ export default function RecordingScreen() {
               </span>
             </div>
 
-            {/* Keywords section */}
-            <div style={{ background: '#181818', borderRadius: 10, padding: '16px 18px', border: '1px solid #2a2a2a' }}>
-              <div style={{
-                fontSize: 10, fontWeight: 700, color: '#b3b3b3',
-                textTransform: 'uppercase', letterSpacing: '2px', marginBottom: 12,
-                display: 'flex', alignItems: 'center', gap: 5,
-              }}>
-                <div style={{ width: 5, height: 5, borderRadius: '50%', background: '#539df5' }} />
-                실시간 키워드
+            {recordingMode === 'realtime' ? (
+              <>
+                <div style={{ background: '#181818', borderRadius: 10, padding: '16px 18px', border: '1px solid #2a2a2a' }}>
+                  <div style={{
+                    fontSize: 10, fontWeight: 700, color: '#b3b3b3',
+                    textTransform: 'uppercase', letterSpacing: '2px', marginBottom: 12,
+                    display: 'flex', alignItems: 'center', gap: 5,
+                  }}>
+                    <div style={{ width: 5, height: 5, borderRadius: '50%', background: '#1ed760' }} />
+                    실시간 대사
+                  </div>
+                  {utterances.length === 0 ? (
+                    <div style={{ fontSize: 12, color: '#4d4d4d', lineHeight: 1.6 }}>
+                      말소리가 감지되면 Deepgram 전사 결과가 여기에 표시됩니다.
+                    </div>
+                  ) : (
+                    <div style={{ display: 'flex', flexDirection: 'column', gap: 10, maxHeight: 260, overflowY: 'auto' }}>
+                      {utterances.slice(-8).map((u) => (
+                        <div key={u.id} style={{ display: 'grid', gridTemplateColumns: '72px 1fr', gap: 10, alignItems: 'start' }}>
+                          <div style={{ fontSize: 11, color: '#1ed760', fontWeight: 700, overflow: 'hidden', textOverflow: 'ellipsis', whiteSpace: 'nowrap' }}>
+                            {u.speakerName}
+                          </div>
+                          <div style={{ fontSize: 13, color: u.isFinal ? '#fff' : '#b3b3b3', lineHeight: 1.55 }}>
+                            {u.text}
+                            {!u.isFinal && <span style={{ color: '#539df5' }}> …</span>}
+                          </div>
+                        </div>
+                      ))}
+                    </div>
+                  )}
+                </div>
+
+                <div style={{ background: '#181818', borderRadius: 10, padding: '16px 18px', border: '1px solid #2a2a2a' }}>
+                  <div style={{
+                    fontSize: 10, fontWeight: 700, color: '#b3b3b3',
+                    textTransform: 'uppercase', letterSpacing: '2px', marginBottom: 12,
+                    display: 'flex', alignItems: 'center', gap: 5,
+                  }}>
+                    <div style={{ width: 5, height: 5, borderRadius: '50%', background: '#539df5' }} />
+                    실시간 키워드
+                  </div>
+                  {keywords.length === 0 ? (
+                    <div style={{ fontSize: 12, color: '#4d4d4d', lineHeight: 1.6 }}>
+                      20초마다 회의 키워드를 추출해요...
+                    </div>
+                  ) : (
+                    <div style={{ display: 'flex', flexWrap: 'wrap', gap: 8 }}>
+                      {keywords.map((kw, idx) => (
+                        <span
+                          key={`${kw}-${idx}`}
+                          style={{
+                            fontSize: 12, fontWeight: 700,
+                            padding: '4px 12px', borderRadius: 9999,
+                            background: '#1a2a3a', color: '#539df5',
+                            border: '1px solid #1a3a5a',
+                          }}
+                        >
+                          {kw}
+                        </span>
+                      ))}
+                    </div>
+                  )}
+                </div>
+              </>
+            ) : (
+              <div style={{ background: '#181818', borderRadius: 10, padding: '16px 18px', border: '1px solid #2a2a2a' }}>
+                <div style={{
+                  fontSize: 10, fontWeight: 700, color: '#b3b3b3',
+                  textTransform: 'uppercase', letterSpacing: '2px', marginBottom: 12,
+                  display: 'flex', alignItems: 'center', gap: 5,
+                }}>
+                  <div style={{ width: 5, height: 5, borderRadius: '50%', background: '#1ed760' }} />
+                  표준 녹음
+                </div>
+                <div style={{ fontSize: 12, color: '#b3b3b3', lineHeight: 1.7 }}>
+                  실시간 전사 연결 없이 녹음 안정성을 우선합니다. 녹음 종료 후 전체 오디오를 AI가 전사하고 회의록으로 정리합니다.
+                </div>
               </div>
-              {keywords.length === 0 ? (
-                <div style={{ fontSize: 12, color: '#4d4d4d', lineHeight: 1.6 }}>
-                  45초마다 회의 키워드를 추출해요...
-                </div>
-              ) : (
-                <div style={{ display: 'flex', flexWrap: 'wrap', gap: 8 }}>
-                  {keywords.map((kw, idx) => (
-                    <span
-                      key={`${kw}-${idx}`}
-                      style={{
-                        fontSize: 12, fontWeight: 700,
-                        padding: '4px 12px', borderRadius: 9999,
-                        background: '#1a2a3a', color: '#539df5',
-                        border: '1px solid #1a3a5a',
-                      }}
-                    >
-                      {kw}
-                    </span>
-                  ))}
-                </div>
-              )}
-            </div>
+            )}
 
             {/* Info text */}
             <div style={{
@@ -556,7 +618,9 @@ export default function RecordingScreen() {
               borderLeft: '3px solid #1ed760',
             }}>
               <div style={{ fontSize: 12, color: '#b3b3b3', lineHeight: 1.7 }}>
-                녹음 종료 후 AI가 전체 내용을 전사하고 회의록을 작성합니다.
+                {recordingMode === 'realtime'
+                  ? '녹음 종료 후 실시간 대사 내용을 우선 사용해 회의록을 작성합니다.'
+                  : '녹음 종료 후 AI가 전체 내용을 전사하고 회의록을 작성합니다.'}
               </div>
             </div>
           </div>
@@ -703,7 +767,13 @@ export default function RecordingScreen() {
             {activeTab === 'summary' && (
               <>
                 {[
-                  { label: 'AI 전사', dot: true, text: '녹음 종료 후 Gemini가 전체 내용을 전사하고 회의록을 작성합니다.' },
+                  {
+                    label: recordingMode === 'realtime' ? 'Deepgram 대사' : 'AI 전사',
+                    dot: true,
+                    text: recordingMode === 'realtime'
+                      ? `실시간 발화 ${utterances.filter((u) => u.isFinal).length}개가 회의록 입력으로 저장됩니다.`
+                      : '녹음 종료 후 Gemini가 전체 내용을 전사하고 회의록을 작성합니다.',
+                  },
                   { label: '발언 통계', dot: false, text: `경과 시간: ${formatTime(elapsedSeconds)}` },
                 ].map((card) => (
                   <div key={card.label} style={{ background: '#1f1f1f', borderRadius: 6, padding: 12, marginBottom: 10 }}>
@@ -728,7 +798,6 @@ export default function RecordingScreen() {
                   return (
                     <SpeakerRow
                       key={speaker}
-                      speaker={speaker}
                       currentName={currentName}
                       words={words}
                       pct={pct}
@@ -765,8 +834,8 @@ export default function RecordingScreen() {
   )
 }
 
-function SpeakerRow({ speaker, currentName, words, pct, idx, onRename }: {
-  speaker: string; currentName: string; words: number; pct: number; idx: number
+function SpeakerRow({ currentName, words, pct, idx, onRename }: {
+  currentName: string; words: number; pct: number; idx: number
   onRename: (name: string) => void
 }) {
   const [editing, setEditing] = useState(false)

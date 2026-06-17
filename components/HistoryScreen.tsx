@@ -190,7 +190,7 @@ export default function HistoryScreen() {
         )}
       </Topbar>
 
-      <div style={{ maxWidth: 960, margin: '0 auto', padding: '32px 24px 60px' }}>
+      <div style={{ maxWidth: 1280, margin: '0 auto', padding: '32px 24px 60px' }}>
         <h1 style={{ fontSize: 24, fontWeight: 700, color: '#fff', marginBottom: 4 }}>회의 히스토리</h1>
         <p style={{ fontSize: 14, color: '#b3b3b3', marginBottom: 20 }}>
           {isHistoryLoading ? '불러오는 중...' : `총 ${active.length}개 저장 · 보관함 ${archived.length}개`}
