@@ -29,13 +29,34 @@
   </div>
 
   <!-- 대기 화면 -->
-  <div id="screen-idle" style="padding:16px">
-    <div class="field-label" style="margin-bottom:6px">회의 제목 (선택)</div>
-    <input class="text-input" id="input-title" type="text" placeholder="제목을 입력하세요" style="margin-bottom:14px" />
-    <button class="btn-record" id="btn-start">
-      <span class="rec-dot"></span>
-      녹음 시작
-    </button>
+  <div id="screen-idle">
+    <!-- 오늘의 캘린더 일정 -->
+    <div id="calendar-section">
+      <div class="section-header">
+        <span class="field-label">오늘 일정</span>
+        <button class="btn-refresh" id="btn-refresh" title="새로고침">
+          <svg width="11" height="11" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.5">
+            <polyline points="23 4 23 10 17 10"/><polyline points="1 20 1 14 7 14"/>
+            <path d="M3.51 9a9 9 0 0 1 14.85-3.36L23 10M1 14l4.64 4.36A9 9 0 0 0 20.49 15"/>
+          </svg>
+        </button>
+      </div>
+      <div id="calendar-list">
+        <div class="cal-loading">불러오는 중...</div>
+      </div>
+    </div>
+
+    <div class="divider"></div>
+
+    <!-- 직접 입력 -->
+    <div style="padding:12px 14px 14px">
+      <div class="field-label" style="margin-bottom:6px">회의 제목 (선택)</div>
+      <input class="text-input" id="input-title" type="text" placeholder="직접 입력하거나 일정을 선택하세요" style="margin-bottom:12px" />
+      <button class="btn-record" id="btn-start">
+        <span class="rec-dot"></span>
+        녹음 시작
+      </button>
+    </div>
   </div>
 
   <!-- 녹음 중 화면 -->
@@ -44,7 +65,7 @@
       <div class="pulse-dot"></div>
       <span id="rec-title-label" class="rec-status-text">녹음 중</span>
     </div>
-    <p class="rec-hint">회의록 작성은 MeetNotes 탭에서 진행됩니다</p>
+    <p class="rec-hint">분석 결과는 MeetNotes 탭에서 확인하세요</p>
     <button class="btn-stop" id="btn-stop">■ 녹음 종료</button>
     <button class="btn-focus" id="btn-focus">MeetNotes 탭으로 이동 →</button>
   </div>
