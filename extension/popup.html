@@ -1,0 +1,104 @@
+<!DOCTYPE html>
+<html lang="ko">
+<head>
+  <meta charset="utf-8" />
+  <meta name="viewport" content="width=device-width, initial-scale=1" />
+  <title>MeetNotes</title>
+  <link rel="stylesheet" href="popup.css" />
+</head>
+<body>
+  <!-- Header -->
+  <div class="header">
+    <div class="logo">
+      <div class="logo-dot"></div>
+      <span class="logo-text">MeetNotes</span>
+    </div>
+    <button class="icon-btn" id="btn-settings" title="설정">
+      <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2">
+        <circle cx="12" cy="12" r="3"/><path d="M19.4 15a1.65 1.65 0 0 0 .33 1.82l.06.06a2 2 0 0 1-2.83 2.83l-.06-.06a1.65 1.65 0 0 0-1.82-.33 1.65 1.65 0 0 0-1 1.51V21a2 2 0 0 1-4 0v-.09A1.65 1.65 0 0 0 9 19.4a1.65 1.65 0 0 0-1.82.33l-.06.06a2 2 0 0 1-2.83-2.83l.06-.06A1.65 1.65 0 0 0 4.68 15a1.65 1.65 0 0 0-1.51-1H3a2 2 0 0 1 0-4h.09A1.65 1.65 0 0 0 4.6 9a1.65 1.65 0 0 0-.33-1.82l-.06-.06a2 2 0 0 1 2.83-2.83l.06.06A1.65 1.65 0 0 0 9 4.68a1.65 1.65 0 0 0 1-1.51V3a2 2 0 0 1 4 0v.09a1.65 1.65 0 0 0 1 1.51 1.65 1.65 0 0 0 1.82-.33l.06-.06a2 2 0 0 1 2.83 2.83l-.06.06A1.65 1.65 0 0 0 19.4 9a1.65 1.65 0 0 0 1.51 1H21a2 2 0 0 1 0 4h-.09a1.65 1.65 0 0 0-1.51 1z"/>
+      </svg>
+    </button>
+  </div>
+
+  <!-- Settings Panel (hidden by default) -->
+  <div class="settings-panel" id="settings-panel" style="display:none">
+    <div class="field-label">앱 URL</div>
+    <div style="display:flex;gap:6px">
+      <input class="text-input" id="input-app-url" type="text" placeholder="http://localhost:3000" />
+      <button class="btn-sm" id="btn-save-url">저장</button>
+    </div>
+  </div>
+
+  <!-- 대기 화면 -->
+  <div id="screen-idle">
+    <div class="field-label" style="margin-bottom:6px">회의 제목</div>
+    <input class="text-input" id="input-title" type="text" placeholder="제목을 입력하세요 (선택)" style="margin-bottom:16px" />
+
+    <div class="field-label" style="margin-bottom:8px">녹음 방식</div>
+    <div class="mode-grid">
+      <div class="mode-card selected" data-mode="mic">
+        <div class="mode-icon">🎙</div>
+        <div class="mode-name">대면 회의</div>
+        <div class="mode-desc">마이크 녹음</div>
+      </div>
+      <div class="mode-card" data-mode="tab">
+        <div class="mode-icon">💻</div>
+        <div class="mode-name">온라인 회의</div>
+        <div class="mode-desc">탭 오디오 캡처</div>
+      </div>
+    </div>
+
+    <button class="btn-record" id="btn-start">
+      <span class="rec-dot"></span>
+      녹음 시작
+    </button>
+  </div>
+
+  <!-- 녹음 중 화면 -->
+  <div id="screen-recording" style="display:none">
+    <div class="recording-header">
+      <div class="pulse-dot"></div>
+      <span id="rec-mode-label">녹음 중</span>
+    </div>
+    <div class="timer" id="timer">00:00</div>
+    <div class="vol-bars" id="vol-bars">
+      <div class="vol-bar" style="height:4px"></div>
+      <div class="vol-bar" style="height:8px"></div>
+      <div class="vol-bar" style="height:6px"></div>
+      <div class="vol-bar" style="height:12px"></div>
+      <div class="vol-bar" style="height:8px"></div>
+      <div class="vol-bar" style="height:6px"></div>
+      <div class="vol-bar" style="height:4px"></div>
+    </div>
+    <div id="rec-title-label" class="rec-title"></div>
+    <button class="btn-stop" id="btn-stop">■ 녹음 종료</button>
+  </div>
+
+  <!-- 분석 중 화면 -->
+  <div id="screen-analyzing" style="display:none">
+    <div class="analyzing-wrap">
+      <div class="spinner"></div>
+      <div class="analyzing-text">AI가 회의록을 작성 중입니다...</div>
+      <div class="analyzing-sub">잠시만 기다려주세요</div>
+    </div>
+  </div>
+
+  <!-- 완료 화면 -->
+  <div id="screen-done" style="display:none">
+    <div class="done-icon">✓</div>
+    <div class="done-title">회의록 완성!</div>
+    <div class="done-meeting-title" id="done-meeting-title"></div>
+    <button class="btn-open-app" id="btn-open-app">앱에서 회의록 보기 →</button>
+    <button class="btn-new" id="btn-new">새 녹음 시작</button>
+  </div>
+
+  <!-- 오류 화면 -->
+  <div id="screen-error" style="display:none">
+    <div class="error-icon">✕</div>
+    <div class="error-msg" id="error-msg"></div>
+    <button class="btn-new" id="btn-error-retry">다시 시도</button>
+  </div>
+
+  <script src="popup.js"></script>
+</body>
+</html>

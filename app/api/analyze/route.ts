@@ -213,8 +213,8 @@ ${audioBase64 ? `=== 전사 및 회의록 작성 지침 ===
         console.warn('sanitizeJson parse failed, trying jsonrepair:', parseErr1)
         console.warn('Raw text (first 500):', text.slice(0, 500))
         try {
-          // Layer 2: jsonrepair (unescaped quotes, trailing commas 등 처리)
-          raw = JSON.parse(jsonrepair(match[0]))
+          // Layer 2: sanitize 후 jsonrepair (unescaped quotes, trailing commas 등 처리)
+          raw = JSON.parse(jsonrepair(sanitizeJson(match[0])))
           console.log('jsonrepair succeeded')
         } catch (parseErr2) {
           console.error('JSON parse failed after jsonrepair:', parseErr2)

@@ -450,7 +450,7 @@ export default function ReviewScreen() {
           {/* Section: Keywords */}
           <Section badge="키워드" badgeStyle={BADGE_STYLES.keywords} title="주요 키워드">
             <div style={{ display: 'flex', flexWrap: 'wrap', gap: 6 }}>
-              {localMinutes.keywords.map((kw) => (
+              {(localMinutes.keywords ?? []).map((kw) => (
                 <span key={kw} style={{
                   fontSize: 11, fontWeight: 700, background: '#1f1f1f', border: '1px solid #4d4d4d',
                   color: '#b3b3b3', padding: '4px 10px', borderRadius: 9999,
