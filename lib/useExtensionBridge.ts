@@ -39,27 +39,33 @@ export function useExtensionBridge() {
   } = useMeetingStore()
 
   useEffect(() => {
-    function handleMessage(event: MessageEvent) {
-      if (event.data?.source !== 'meetnotes-ext') return
-      const { type, title: evtTitle, attendees: evtAttendees } = event.data
+    function applyExtEvent(data: { type: string; title?: string; attendees?: RawAttendee[] }) {
       const extra = buildExtraParticipants(
-        Array.isArray(evtAttendees) ? evtAttendees : []
+        Array.isArray(data.attendees) ? data.attendees : []
       )
-
-      // 1단계: 일정 선택 → SetupScreen 제목 + 참여자 자동 입력
-      if (type === 'SELECT_EVENT') {
-        selectEventFromExt(evtTitle ?? '', extra)
-      }
-
-      // 2단계: 녹음 시작 → RecordingScreen으로 이동
-      if (type === 'START_RECORDING') {
-        startRecordingFromExt(evtTitle ?? '', extra)
-      }
-
-      // 종료 트리거
-      if (type === 'STOP_RECORDING') {
+      if (data.type === 'SELECT_EVENT') {
+        selectEventFromExt(data.title ?? '', extra)
+      } else if (data.type === 'START_RECORDING') {
+        startRecordingFromExt(data.title ?? '', extra)
+      } else if (data.type === 'STOP_RECORDING') {
         window.dispatchEvent(new CustomEvent('ext:stop-recording'))
       }
+    }
+
+    // 마운트 시 localStorage에 미처리 이벤트가 있으면 즉시 처리
+    try {
+      const raw = localStorage.getItem('meetnotes_pending_event')
+      if (raw) {
+        const data = JSON.parse(raw)
+        if (data?.source === 'meetnotes-ext') applyExtEvent(data)
+        localStorage.removeItem('meetnotes_pending_event')
+      }
+    } catch { /* ignore */ }
+
+    function handleMessage(event: MessageEvent) {
+      if (event.data?.source !== 'meetnotes-ext') return
+      localStorage.removeItem('meetnotes_pending_event')
+      applyExtEvent(event.data)
     }
 
     window.addEventListener('message', handleMessage)

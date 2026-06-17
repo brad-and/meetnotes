@@ -29,11 +29,13 @@ async function openMeetNotesTab() {
 }
 
 // 웹앱 window에 직접 postMessage 주입 (MAIN world)
+// localStorage에도 저장해 React 마운트 전 타이밍 이슈 방지
 async function postToWebApp(tabId, data) {
   await chrome.scripting.executeScript({
     target: { tabId },
     world: 'MAIN',
     func: (payload) => {
+      localStorage.setItem('meetnotes_pending_event', JSON.stringify(payload))
       window.postMessage({ source: 'meetnotes-ext', ...payload }, '*')
     },
     args: [data],
