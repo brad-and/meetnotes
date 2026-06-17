@@ -218,6 +218,14 @@ export default function RecordingScreen() {
     }
   }, [meetingType, recordingMode, selectedMicId, startRecording, stopRecording])
 
+  // 크롬 익스텐션 종료 명령 수신
+  useEffect(() => {
+    const handler = () => handleStop()
+    window.addEventListener('ext:stop-recording', handler)
+    return () => window.removeEventListener('ext:stop-recording', handler)
+  // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [])
+
   const handleFileUpload = useCallback(async () => {
     if (!uploadFile) return
     setIsTranscribing(true)
