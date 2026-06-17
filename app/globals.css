@@ -142,13 +142,13 @@ body {
   position: relative;
   width: 36px;
   height: 20px;
-  background: var(--border-mid);
+  background: var(--border-mid, #4d4d4d);
   border-radius: 9999px;
   cursor: pointer;
   transition: background .2s;
   flex-shrink: 0;
 }
-.sp-toggle.on { background: var(--green); }
+.sp-toggle.on { background: var(--green, #1ed760); }
 .sp-toggle-thumb {
   position: absolute;
   top: 2px; left: 2px;

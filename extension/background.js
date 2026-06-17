@@ -24,8 +24,8 @@ async function openMeetNotesTab() {
       if (t.status === 'complete') break
     } catch { break }
   }
-  // React 마운트 대기
-  await new Promise((r) => setTimeout(r, 800))
+  // React 마운트 + Turbopack CSS 주입 대기
+  await new Promise((r) => setTimeout(r, 2000))
   return tab
 }
 
