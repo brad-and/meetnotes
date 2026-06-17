@@ -16,26 +16,28 @@ async function findMeetNotesTab() {
 async function openMeetNotesTab() {
   const appUrl = await getAppUrl()
   const tab = await chrome.tabs.create({ url: appUrl })
-  await new Promise((resolve) => {
-    chrome.tabs.onUpdated.addListener(function listener(tabId, info) {
-      if (tabId === tab.id && info.status === 'complete') {
-        chrome.tabs.onUpdated.removeListener(listener)
-        resolve()
-      }
-    })
-  })
-  await new Promise((r) => setTimeout(r, 1000))
+  // 폴링으로 complete 대기 (onUpdated 리스너 레이스 컨디션 방지)
+  for (let i = 0; i < 30; i++) {
+    await new Promise((r) => setTimeout(r, 200))
+    try {
+      const t = await chrome.tabs.get(tab.id)
+      if (t.status === 'complete') break
+    } catch { break }
+  }
+  // React 마운트 대기
+  await new Promise((r) => setTimeout(r, 800))
   return tab
 }
 
-// 웹앱 window에 직접 postMessage 주입 (MAIN world)
-// localStorage에도 저장해 React 마운트 전 타이밍 이슈 방지
+// 웹앱 window에 직접 이벤트 주입 (MAIN world)
+// localStorage + postMessage + CustomEvent 삼중 채널로 타이밍 이슈 방지
 async function postToWebApp(tabId, data) {
   await chrome.scripting.executeScript({
     target: { tabId },
     world: 'MAIN',
     func: (payload) => {
       localStorage.setItem('meetnotes_pending_event', JSON.stringify(payload))
+      window.dispatchEvent(new CustomEvent('meetnotes-from-ext', { detail: payload }))
       window.postMessage({ source: 'meetnotes-ext', ...payload }, '*')
     },
     args: [data],
@@ -178,11 +180,13 @@ chrome.notifications.onClicked.addListener(async (notifId) => {
 // ── 메시지 핸들러 ─────────────────────────────────────────────────────────
 chrome.runtime.onMessage.addListener((msg, _sender, sendResponse) => {
   ;(async () => {
+    try {
     // 팝업 → 웹앱: 일정 선택 (1단계 자동 세팅)
     if (msg.type === 'SELECT_EVENT') {
       let tab = await findMeetNotesTab()
       if (!tab) tab = await openMeetNotesTab()
       await chrome.tabs.update(tab.id, { active: true })
+      chrome.windows.update(tab.windowId, { focused: true })
       await ensureContentScript(tab.id)
       await postToWebApp(tab.id, {
         type: 'SELECT_EVENT',
@@ -197,6 +201,7 @@ chrome.runtime.onMessage.addListener((msg, _sender, sendResponse) => {
       let tab = await findMeetNotesTab()
       if (!tab) tab = await openMeetNotesTab()
       await chrome.tabs.update(tab.id, { active: true })
+      chrome.windows.update(tab.windowId, { focused: true })
       await ensureContentScript(tab.id)
       await postToWebApp(tab.id, {
         type: 'START_RECORDING',
@@ -242,6 +247,10 @@ chrome.runtime.onMessage.addListener((msg, _sender, sendResponse) => {
     else if (msg.type === 'CHECK_MEETINGS') {
       await checkUpcomingMeetings()
       sendResponse({ ok: true })
+    }
+
+    } catch (err) {
+      sendResponse({ ok: false, error: String(err) })
     }
   })()
   return true

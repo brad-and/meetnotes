@@ -68,8 +68,19 @@ export function useExtensionBridge() {
       applyExtEvent(event.data)
     }
 
+    function handleCustomEvent(event: Event) {
+      const detail = (event as CustomEvent).detail
+      if (!detail) return
+      localStorage.removeItem('meetnotes_pending_event')
+      applyExtEvent(detail)
+    }
+
     window.addEventListener('message', handleMessage)
-    return () => window.removeEventListener('message', handleMessage)
+    window.addEventListener('meetnotes-from-ext', handleCustomEvent)
+    return () => {
+      window.removeEventListener('message', handleMessage)
+      window.removeEventListener('meetnotes-from-ext', handleCustomEvent)
+    }
   }, [selectEventFromExt, startRecordingFromExt])
 
   // 웹앱 상태 → 익스텐션 전달
