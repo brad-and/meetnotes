@@ -35,6 +35,8 @@ function show(id) {
     show('screen-idle')
     loadCalendar()
   }
+  // 팝업 열릴 때 즉시 회의 알림 체크
+  chrome.runtime.sendMessage({ type: 'CHECK_MEETINGS' })
 })()
 
 // ── 캘린더 조회 ───────────────────────────────────────────────────────────

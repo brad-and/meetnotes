@@ -1,4 +1,5 @@
 const DEFAULT_APP_URL = 'http://localhost:3000'
+const NOTIFY_BEFORE_MS = 3 * 60 * 1000  // 3분 전 알림
 
 async function getAppUrl() {
   return new Promise((resolve) =>
@@ -23,12 +24,11 @@ async function openMeetNotesTab() {
       }
     })
   })
-  // 페이지 로드 후 React 마운트 대기
   await new Promise((r) => setTimeout(r, 1000))
   return tab
 }
 
-// 웹앱 window에 직접 postMessage 주입 (MAIN world — content.js 거치지 않음)
+// 웹앱 window에 직접 postMessage 주입 (MAIN world)
 async function postToWebApp(tabId, data) {
   await chrome.scripting.executeScript({
     target: { tabId },
@@ -48,6 +48,135 @@ async function ensureContentScript(tabId) {
     // 이미 주입됨
   }
 }
+
+// ── 회의 알림 ──────────────────────────────────────────────────────────────
+
+// 알림용 이벤트 키: 제목 + 시작시각으로 중복 방지
+function eventKey(event) {
+  return `${event.title}__${event.start}`
+}
+
+async function checkUpcomingMeetings() {
+  const { isRecording } = await new Promise((r) =>
+    chrome.storage.session.get(['isRecording'], r)
+  )
+  if (isRecording) return  // 이미 녹음 중이면 알림 불필요
+
+  const appUrl = await getAppUrl()
+  let events = []
+  try {
+    const res = await fetch(`${appUrl}/api/calendar/events`)
+    if (!res.ok) return
+    const data = await res.json()
+    events = data.events || []
+  } catch {
+    return
+  }
+
+  const now = Date.now()
+  const { notifiedKeys = {} } = await new Promise((r) =>
+    chrome.storage.session.get(['notifiedKeys'], r)
+  )
+
+  // 오늘 이후 알림을 보낸 키는 24시간 지나면 만료
+  const freshKeys = {}
+  for (const [k, ts] of Object.entries(notifiedKeys)) {
+    if (now - ts < 24 * 60 * 60 * 1000) freshKeys[k] = ts
+  }
+
+  for (const event of events) {
+    const start = new Date(event.start).getTime()
+    const msUntil = start - now
+
+    // 3분 전 ~ 시작 후 1분 사이의 이벤트만 알림
+    if (msUntil > NOTIFY_BEFORE_MS || msUntil < -60_000) continue
+
+    const key = eventKey(event)
+    if (freshKeys[key]) continue  // 이미 알림 보냄
+
+    const timeStr = new Date(event.start).toLocaleTimeString('ko-KR', {
+      hour: '2-digit', minute: '2-digit', hour12: false,
+    })
+    const minutesLeft = Math.max(0, Math.round(msUntil / 60_000))
+    const message = minutesLeft > 0
+      ? `${timeStr} 시작 — ${minutesLeft}분 후`
+      : `${timeStr} 시작`
+
+    chrome.notifications.create(key, {
+      type: 'basic',
+      iconUrl: 'icons/icon128.png',
+      title: `📋 ${event.title}`,
+      message,
+      buttons: [
+        { title: '녹음 시작' },
+        { title: '닫기' },
+      ],
+      requireInteraction: true,
+    })
+
+    freshKeys[key] = now
+
+    // 알림 클릭 시 사용할 이벤트 정보 저장
+    const pendingNotifs = await new Promise((r) =>
+      chrome.storage.session.get(['pendingNotifs'], r)
+    ).then((d) => d.pendingNotifs || {})
+    pendingNotifs[key] = { title: event.title, attendees: event.attendees || [] }
+    await chrome.storage.session.set({ pendingNotifs })
+  }
+
+  await chrome.storage.session.set({ notifiedKeys: freshKeys })
+}
+
+// 설치/업데이트 시 알람 등록
+chrome.runtime.onInstalled.addListener(() => {
+  chrome.alarms.create('meetingCheck', { periodInMinutes: 1 })
+})
+
+// 브라우저 재시작 시에도 알람 유지
+chrome.runtime.onStartup.addListener(() => {
+  chrome.alarms.create('meetingCheck', { periodInMinutes: 1 })
+})
+
+chrome.alarms.onAlarm.addListener((alarm) => {
+  if (alarm.name === 'meetingCheck') checkUpcomingMeetings()
+})
+
+// ── 알림 버튼 클릭 ────────────────────────────────────────────────────────
+chrome.notifications.onButtonClicked.addListener(async (notifId, btnIdx) => {
+  chrome.notifications.clear(notifId)
+  if (btnIdx !== 0) return  // 닫기
+
+  const { pendingNotifs = {} } = await new Promise((r) =>
+    chrome.storage.session.get(['pendingNotifs'], r)
+  )
+  const evtData = pendingNotifs[notifId]
+  if (!evtData) return
+
+  let tab = await findMeetNotesTab()
+  if (!tab) tab = await openMeetNotesTab()
+  await chrome.tabs.update(tab.id, { active: true })
+  chrome.windows.update(tab.windowId, { focused: true })
+  await ensureContentScript(tab.id)
+  await postToWebApp(tab.id, {
+    type: 'START_RECORDING',
+    title: evtData.title,
+    attendees: evtData.attendees,
+  })
+  await chrome.storage.session.set({
+    isRecording: true, isStopping: false, isDone: false,
+    error: null, result: null,
+    startTime: Date.now(), title: evtData.title, tabId: tab.id,
+  })
+})
+
+// 알림 본체 클릭 → 탭 포커스만
+chrome.notifications.onClicked.addListener(async (notifId) => {
+  chrome.notifications.clear(notifId)
+  let tab = await findMeetNotesTab()
+  if (!tab) tab = await openMeetNotesTab()
+  await chrome.tabs.update(tab.id, { active: true })
+  chrome.windows.update(tab.windowId, { focused: true })
+})
 
 // ── 메시지 핸들러 ─────────────────────────────────────────────────────────
 chrome.runtime.onMessage.addListener((msg, _sender, sendResponse) => {
@@ -110,6 +239,12 @@ chrome.runtime.onMessage.addListener((msg, _sender, sendResponse) => {
           result: event.result ?? null, error: event.error ?? null,
         })
       }
+    }
+
+    // 팝업 → background: 즉시 알림 체크 (팝업 열릴 때 호출)
+    else if (msg.type === 'CHECK_MEETINGS') {
+      await checkUpcomingMeetings()
+      sendResponse({ ok: true })
     }
   })()
   return true
