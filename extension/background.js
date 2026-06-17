@@ -23,21 +23,30 @@ async function openMeetNotesTab() {
       }
     })
   })
+  // 페이지 로드 후 React 마운트 대기
+  await new Promise((r) => setTimeout(r, 1000))
   return tab
 }
 
-async function injectContentScript(tabId) {
+// 웹앱 window에 직접 postMessage 주입 (MAIN world — content.js 거치지 않음)
+async function postToWebApp(tabId, data) {
+  await chrome.scripting.executeScript({
+    target: { tabId },
+    world: 'MAIN',
+    func: (payload) => {
+      window.postMessage({ source: 'meetnotes-ext', ...payload }, '*')
+    },
+    args: [data],
+  })
+}
+
+// 역방향 채널(웹앱→익스텐션)용 content.js 주입
+async function ensureContentScript(tabId) {
   try {
     await chrome.scripting.executeScript({ target: { tabId }, files: ['content.js'] })
   } catch {
-    // 이미 주입됐으면 무시
+    // 이미 주입됨
   }
-  await new Promise((r) => setTimeout(r, 150))
-}
-
-async function sendToTab(tabId, payload) {
-  await injectContentScript(tabId)
-  return chrome.tabs.sendMessage(tabId, { type: 'EXT_CMD', payload })
 }
 
 // ── 메시지 핸들러 ─────────────────────────────────────────────────────────
@@ -48,7 +57,12 @@ chrome.runtime.onMessage.addListener((msg, _sender, sendResponse) => {
       let tab = await findMeetNotesTab()
       if (!tab) tab = await openMeetNotesTab()
       await chrome.tabs.update(tab.id, { active: true })
-      await sendToTab(tab.id, { type: 'SELECT_EVENT', title: msg.title, attendees: msg.attendees ?? [] })
+      await ensureContentScript(tab.id)
+      await postToWebApp(tab.id, {
+        type: 'SELECT_EVENT',
+        title: msg.title,
+        attendees: msg.attendees ?? [],
+      })
       sendResponse({ ok: true })
     }
 
@@ -56,10 +70,13 @@ chrome.runtime.onMessage.addListener((msg, _sender, sendResponse) => {
     else if (msg.type === 'START_RECORDING') {
       let tab = await findMeetNotesTab()
       if (!tab) tab = await openMeetNotesTab()
-
       await chrome.tabs.update(tab.id, { active: true })
-      await sendToTab(tab.id, { type: 'START_RECORDING', title: msg.title, attendees: msg.attendees ?? [] })
-
+      await ensureContentScript(tab.id)
+      await postToWebApp(tab.id, {
+        type: 'START_RECORDING',
+        title: msg.title,
+        attendees: msg.attendees ?? [],
+      })
       await chrome.storage.session.set({
         isRecording: true, isStopping: false, isDone: false,
         error: null, result: null,
@@ -71,12 +88,14 @@ chrome.runtime.onMessage.addListener((msg, _sender, sendResponse) => {
     // 팝업 → 웹앱: 녹음 종료
     else if (msg.type === 'STOP_RECORDING') {
       const { tabId } = await new Promise((r) => chrome.storage.session.get(['tabId'], r))
-      if (tabId) await sendToTab(tabId, { type: 'STOP_RECORDING' })
+      if (tabId) {
+        await postToWebApp(tabId, { type: 'STOP_RECORDING' })
+      }
       await chrome.storage.session.set({ isRecording: false, isStopping: true })
       sendResponse({ ok: true })
     }
 
-    // 웹앱 → 팝업: 상태 업데이트
+    // 웹앱 → 팝업: 상태 업데이트 (content.js에서 전달)
     else if (msg.type === 'APP_EVENT') {
       const { event } = msg
       if (event.type === 'RECORDING_STARTED') {
