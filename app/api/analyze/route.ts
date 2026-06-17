@@ -129,7 +129,7 @@ export async function POST(req: NextRequest) {
           }
         }
         if (currentLine) lines.push(`${currentSpeaker}: ${currentLine.trim()}`)
-        transcript = lines.join('\n') || dgData?.results?.channels?.[0]?.alternatives?.[0]?.transcript ?? ''
+        transcript = lines.join('\n') || (dgData?.results?.channels?.[0]?.alternatives?.[0]?.transcript ?? '')
       }
     } else {
       const body = await req.json()
