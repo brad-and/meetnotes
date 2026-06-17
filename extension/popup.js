@@ -8,6 +8,9 @@ const $recTitleLabel = document.getElementById('rec-title-label')
 const $errorMsg      = document.getElementById('error-msg')
 const $calendarList  = document.getElementById('calendar-list')
 
+// 현재 선택된 캘린더 이벤트 참석자 보관
+let selectedAttendees = []
+
 function show(id) {
   ;['screen-idle', 'screen-recording', 'screen-error'].forEach((s) => {
     document.getElementById(s).style.display = s === id ? '' : 'none'
@@ -33,19 +36,17 @@ function show(id) {
 async function loadCalendar() {
   const { appUrl } = await localGet(['appUrl'])
   const base = appUrl || DEFAULT_APP_URL
+  $calendarList.innerHTML = '<div class="cal-loading">불러오는 중...</div>'
 
   try {
     const res = await fetch(`${base}/api/calendar/events`)
     if (!res.ok) throw new Error('not_configured')
     const { events } = await res.json()
 
-    const today = new Date()
-    const todayStr = today.toDateString()
-
-    const todayEvents = (events || []).filter((e) => {
-      return new Date(e.start).toDateString() === todayStr
-    })
-
+    const todayStr = new Date().toDateString()
+    const todayEvents = (events || []).filter(
+      (e) => new Date(e.start).toDateString() === todayStr
+    )
     renderCalendar(todayEvents)
   } catch {
     $calendarList.innerHTML = '<div class="cal-empty">캘린더 미연동 — 앱에서 설정하세요</div>'
@@ -62,15 +63,17 @@ function renderCalendar(events) {
   $calendarList.innerHTML = ''
 
   events.forEach((event) => {
-    const start   = new Date(event.start)
-    const end     = new Date(event.end)
-    const isPast  = end < now
-    const isNow   = start <= now && now <= end
+    const start  = new Date(event.start)
+    const end    = new Date(event.end)
+    const isPast = end < now
+    const isNow  = start <= now && now <= end
 
     const item = document.createElement('div')
     item.className = `cal-item${isPast ? ' past' : ''}${isNow ? ' now' : ''}`
 
-    const timeStr = start.toLocaleTimeString('ko-KR', { hour: '2-digit', minute: '2-digit', hour12: false })
+    const timeStr = start.toLocaleTimeString('ko-KR', {
+      hour: '2-digit', minute: '2-digit', hour12: false,
+    })
 
     item.innerHTML = `
       <div class="cal-time">${timeStr}</div>
@@ -80,31 +83,45 @@ function renderCalendar(events) {
           ${isNow ? '<span class="cal-badge">진행중</span>' : ''}
         </div>
       </div>
-      ${!isPast ? `<button class="cal-rec-btn" data-title="${escAttr(event.title)}">● 녹음</button>` : ''}
+      <div class="cal-check">✓</div>
     `
 
-    // 일정 클릭 → 제목 자동 입력
-    item.addEventListener('click', () => {
-      $inputTitle.value = event.title
-      $inputTitle.focus()
-    })
-
-    // 녹음 버튼 클릭 → 즉시 녹음 시작 (제목 + 참석자 전달)
-    const recBtn = item.querySelector('.cal-rec-btn')
-    if (recBtn) {
-      recBtn.addEventListener('click', (e) => {
-        e.stopPropagation()
-        startRecording(event.title, event.attendees || [])
-      })
-    }
+    // 이벤트 클릭 → 1단계 세팅 (제목 + 참여자 자동 입력)
+    item.addEventListener('click', () => selectEvent(item, event))
 
     $calendarList.appendChild(item)
   })
 }
 
-// ── 녹음 시작 ─────────────────────────────────────────────────────────────
-async function startRecording(title, attendees = []) {
-  const res = await chrome.runtime.sendMessage({ type: 'START_RECORDING', title, attendees })
+// ── 이벤트 선택 → 웹앱 1단계 자동 세팅 ──────────────────────────────────
+async function selectEvent(itemEl, event) {
+  // 팝업 UI 업데이트
+  document.querySelectorAll('.cal-item').forEach((el) => el.classList.remove('selected'))
+  itemEl.classList.add('selected')
+  $inputTitle.value = event.title
+  selectedAttendees = event.attendees || []
+
+  // 웹앱 1단계(SetupScreen)에 제목 + 참여자 자동 입력
+  const res = await chrome.runtime.sendMessage({
+    type: 'SELECT_EVENT',
+    title: event.title,
+    attendees: selectedAttendees,
+  })
+
+  if (!res?.ok) {
+    $errorMsg.textContent = res?.error || '앱 연결 실패. 설정에서 URL을 확인하세요.'
+    show('screen-error')
+  }
+}
+
+// ── 녹음 시작 → 웹앱 2단계 이동 ─────────────────────────────────────────
+document.getElementById('btn-start').addEventListener('click', async () => {
+  const title = $inputTitle.value.trim()
+  const res = await chrome.runtime.sendMessage({
+    type: 'START_RECORDING',
+    title,
+    attendees: selectedAttendees,
+  })
 
   if (!res?.ok) {
     $errorMsg.textContent = res?.error || '앱 연결 실패. 설정에서 URL을 확인하세요.'
@@ -115,16 +132,13 @@ async function startRecording(title, attendees = []) {
   await chrome.storage.session.set({ isRecording: true, title })
   $recTitleLabel.textContent = title ? `"${title}" 녹음 중` : '녹음 중'
   show('screen-recording')
-}
-
-document.getElementById('btn-start').addEventListener('click', () => {
-  startRecording($inputTitle.value.trim())
 })
 
 // ── 녹음 종료 ─────────────────────────────────────────────────────────────
 document.getElementById('btn-stop').addEventListener('click', async () => {
   await chrome.runtime.sendMessage({ type: 'STOP_RECORDING' })
   await chrome.storage.session.clear()
+  selectedAttendees = []
   $inputTitle.value = ''
   show('screen-idle')
   loadCalendar()
@@ -144,11 +158,8 @@ document.getElementById('btn-focus').addEventListener('click', async () => {
   }
 })
 
-// ── 캘린더 새로고침 ───────────────────────────────────────────────────────
-document.getElementById('btn-refresh').addEventListener('click', () => {
-  $calendarList.innerHTML = '<div class="cal-loading">불러오는 중...</div>'
-  loadCalendar()
-})
+// ── 새로고침 ──────────────────────────────────────────────────────────────
+document.getElementById('btn-refresh').addEventListener('click', loadCalendar)
 
 // ── 재시도 ────────────────────────────────────────────────────────────────
 document.getElementById('btn-retry').addEventListener('click', () => {
@@ -171,5 +182,4 @@ document.getElementById('btn-save-url').addEventListener('click', async () => {
 // ── Helpers ───────────────────────────────────────────────────────────────
 const localGet   = (k) => new Promise((r) => chrome.storage.local.get(k, r))
 const sessionGet = (k) => new Promise((r) => chrome.storage.session.get(k, r))
-const escHtml    = (s) => s.replace(/&/g,'&amp;').replace(/</g,'&lt;').replace(/>/g,'&gt;')
-const escAttr    = (s) => s.replace(/"/g, '&quot;')
+const escHtml    = (s) => s.replace(/&/g, '&amp;').replace(/</g, '&lt;').replace(/>/g, '&gt;')

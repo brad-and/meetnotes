@@ -118,21 +118,19 @@ body {
   vertical-align: middle;
 }
 
-.cal-rec-btn {
-  font-size: 9px;
-  font-weight: 700;
-  background: #1ed760;
-  color: #000;
-  border: none;
-  border-radius: 10px;
-  padding: 3px 8px;
-  cursor: pointer;
+.cal-check {
+  font-size: 13px;
+  color: #1ed760;
   flex-shrink: 0;
   opacity: 0;
   transition: opacity .15s;
 }
-.cal-item:hover .cal-rec-btn { opacity: 1; }
-.cal-item.now .cal-rec-btn   { opacity: 1; }
+.cal-item.selected .cal-check { opacity: 1; }
+
+.cal-item.selected {
+  background: #0f2a0f;
+  border-color: #1ed760;
+}
 
 /* ── Divider ── */
 .divider {

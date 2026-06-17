@@ -43,8 +43,17 @@ async function sendToTab(tabId, payload) {
 // ── 메시지 핸들러 ─────────────────────────────────────────────────────────
 chrome.runtime.onMessage.addListener((msg, _sender, sendResponse) => {
   ;(async () => {
-    // 팝업 → 웹앱: 녹음 시작
-    if (msg.type === 'START_RECORDING') {
+    // 팝업 → 웹앱: 일정 선택 (1단계 자동 세팅)
+    if (msg.type === 'SELECT_EVENT') {
+      let tab = await findMeetNotesTab()
+      if (!tab) tab = await openMeetNotesTab()
+      await chrome.tabs.update(tab.id, { active: true })
+      await sendToTab(tab.id, { type: 'SELECT_EVENT', title: msg.title, attendees: msg.attendees ?? [] })
+      sendResponse({ ok: true })
+    }
+
+    // 팝업 → 웹앱: 녹음 시작 (2단계 이동)
+    else if (msg.type === 'START_RECORDING') {
       let tab = await findMeetNotesTab()
       if (!tab) tab = await openMeetNotesTab()
 
