@@ -130,7 +130,11 @@ export async function POST(req: NextRequest) {
         }
         if (currentLine) lines.push(`${currentSpeaker}: ${currentLine.trim()}`)
         const fallback = dgData?.results?.channels?.[0]?.alternatives?.[0]?.transcript ?? ''
-        transcript = lines.join('\n') || fallback
+        // Deepgram이 음성을 인식하지 못한 경우 → 빈 트랜스크립트 명시 후 계속 진행
+        transcript = lines.join('\n') || fallback || '(오디오에서 음성이 감지되지 않았습니다)'
+      } else {
+        // 오디오 파일 없음 — 빈 트랜스크립트로 처리
+        transcript = '(오디오 파일이 없습니다)'
       }
     } else {
       const body = await req.json()
