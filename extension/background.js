@@ -158,14 +158,9 @@ chrome.notifications.onButtonClicked.addListener(async (notifId, btnIdx) => {
   chrome.windows.update(tab.windowId, { focused: true })
   await ensureContentScript(tab.id)
   await postToWebApp(tab.id, {
-    type: 'START_RECORDING',
+    type: 'SELECT_EVENT',
     title: evtData.title,
     attendees: evtData.attendees,
-  })
-  await chrome.storage.session.set({
-    isRecording: true, isStopping: false, isDone: false,
-    error: null, result: null,
-    startTime: Date.now(), title: evtData.title, tabId: tab.id,
   })
 })
 
