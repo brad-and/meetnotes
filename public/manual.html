@@ -177,13 +177,14 @@
   <a href="#design">🎨 디자인</a>
   <a href="#dev">⚙️ 개발</a>
   <a href="#qa">🧪 QA</a>
+  <a href="#v2">🚀 기능개선 2.0</a>
 </nav>
 
 <div class="page">
 
 <!-- HERO -->
 <div class="hero">
-  <div class="hero-badge">📖 Team Manual v1.0</div>
+  <div class="hero-badge">📖 Team Manual v2.0</div>
   <h1>MeetNotes<br><em>AI 회의록</em> 서비스 개발 가이드</h1>
   <p>회의를 녹음하면 AI가 자동으로 회의록을 작성해주는 MeetNotes 전체 개발 과정을 담은 팀 매뉴얼입니다.</p>
   <div class="hero-chips">
@@ -191,6 +192,8 @@
     <span class="chip blue">✨ Gemini 2.5 Flash</span>
     <span class="chip orange">💬 Slack 전송</span>
     <span class="chip purple">Next.js 16</span>
+    <span class="chip green">🔔 Chrome 회의 알림</span>
+    <span class="chip blue">🤖 할루시네이션 방지</span>
   </div>
 </div>
 
@@ -202,6 +205,7 @@
   <a href="#design" class="phase-btn"><span class="phase-num">3</span>🎨 디자인</a>
   <a href="#dev" class="phase-btn"><span class="phase-num">4</span>⚙️ 개발</a>
   <a href="#qa" class="phase-btn"><span class="phase-num">5</span>🧪 QA</a>
+  <a href="#v2" class="phase-btn"><span class="phase-num">6</span>🚀 기능개선 2.0</a>
 </div>
 
 
@@ -1818,6 +1822,342 @@ blocks.<span class="fn">push</span>(
       <div class="callout-icon">🚀</div>
       <div><strong>처음 설치하는 분:</strong> 위의 <a href="#setup" style="color:var(--green)">🚀 시작하기 섹션</a>에 API 키 발급부터 앱 실행까지 단계별 안내가 있습니다. <code>npm install</code> → <code>npm run dev</code> → <a href="http://localhost:3000" style="color:var(--green)">localhost:3000</a> 접속. <code>data/</code> 디렉토리는 자동 생성됩니다.</div>
     </div>
+  </div>
+</section>
+
+
+
+<!-- ═══════════════════════════════════════════════════ -->
+<!-- 6. 기능개선 2.0 -->
+<!-- ═══════════════════════════════════════════════════ -->
+<section class="section" id="v2">
+  <div class="section-header">
+    <div class="section-badge green">06 · 기능개선 2.0</div>
+    <h2>2026.06.17 업데이트 내역</h2>
+  </div>
+
+  <!-- 변경 요약 타임라인 -->
+  <div class="card" style="margin-bottom:24px">
+    <h3 style="margin-bottom:16px">📦 릴리즈 요약</h3>
+    <div class="flow" style="flex-wrap:wrap;gap:10px;overflow-x:visible">
+      <div class="fnode active"><div class="ficon">🔔</div><div class="flabel">회의 알림</div></div>
+      <div class="farrow green">→</div>
+      <div class="fnode active"><div class="ficon">🤖</div><div class="flabel">AI 할루시네이션<br>방지</div></div>
+      <div class="farrow green">→</div>
+      <div class="fnode active"><div class="ficon">🔗</div><div class="flabel">익스텐션<br>상태 Sync</div></div>
+      <div class="farrow green">→</div>
+      <div class="fnode active"><div class="ficon">🎨</div><div class="flabel">CSS 타이밍<br>버그 수정</div></div>
+    </div>
+    <div style="display:grid;grid-template-columns:repeat(4,1fr);gap:12px;margin-top:16px">
+      <div style="background:var(--bg-elevated);border-radius:8px;padding:12px;text-align:center">
+        <div style="font-size:22px;margin-bottom:4px">🔔</div>
+        <div style="font-size:11px;font-weight:700;color:var(--green);margin-bottom:4px">CHROME EXTENSION</div>
+        <div style="font-size:12px;color:var(--text-secondary)">회의 3분 전 알림 + 클릭 시 웹앱 자동 세팅</div>
+      </div>
+      <div style="background:var(--bg-elevated);border-radius:8px;padding:12px;text-align:center">
+        <div style="font-size:22px;margin-bottom:4px">🤖</div>
+        <div style="font-size:11px;font-weight:700;color:var(--blue);margin-bottom:4px">AI ANALYSIS</div>
+        <div style="font-size:12px;color:var(--text-secondary)">temperature:0 + 3단계 사실 기반 구조</div>
+      </div>
+      <div style="background:var(--bg-elevated);border-radius:8px;padding:12px;text-align:center">
+        <div style="font-size:22px;margin-bottom:4px">🔗</div>
+        <div style="font-size:11px;font-weight:700;color:var(--orange);margin-bottom:4px">SYNC FIX</div>
+        <div style="font-size:12px;color:var(--text-secondary)">녹음 완료 후 팝업 상태 불일치 수정</div>
+      </div>
+      <div style="background:var(--bg-elevated);border-radius:8px;padding:12px;text-align:center">
+        <div style="font-size:22px;margin-bottom:4px">🎨</div>
+        <div style="font-size:11px;font-weight:700;color:var(--purple);margin-bottom:4px">CSS FIX</div>
+        <div style="font-size:12px;color:var(--text-secondary)">Turbopack 타이밍 버그 — 제목·토글 가시성</div>
+      </div>
+    </div>
+  </div>
+
+  <!-- ① Chrome Extension 회의 알림 -->
+  <div class="card" style="border-left:3px solid var(--green);margin-bottom:20px">
+    <div style="display:flex;align-items:center;gap:10px;margin-bottom:14px">
+      <span class="badge green">NEW</span>
+      <h3 style="margin:0">① Chrome 익스텐션 — 회의 3분 전 알림</h3>
+    </div>
+    <p style="margin-bottom:16px;font-size:13px;color:var(--text-secondary)">
+      구글 캘린더 일정을 1분 주기로 폴링해, 회의 시작 <strong>3분 전</strong>에 Chrome 알림을 표시합니다.
+      알림의 <strong>"녹음 시작"</strong> 버튼을 클릭하면 웹앱이 열리고 회의 제목·참여자가 1단계에 자동으로 입력됩니다.
+    </p>
+
+    <div class="grid-2" style="margin-bottom:16px">
+      <div>
+        <div class="code-label">동작 흐름</div>
+        <div class="steps">
+          <div class="step">
+            <div class="step-left"><div class="step-num">1</div><div class="step-line"></div></div>
+            <div class="step-content">
+              <h4>1분 주기 폴링</h4>
+              <p><code>chrome.alarms</code>로 1분마다 <code>/api/calendar/events</code>를 호출해 오늘 일정을 가져옵니다.</p>
+            </div>
+          </div>
+          <div class="step">
+            <div class="step-left"><div class="step-num">2</div><div class="step-line"></div></div>
+            <div class="step-content">
+              <h4>3분 전 알림 표시</h4>
+              <p>시작까지 <strong>3분 이내</strong>이고 아직 알림을 보내지 않은 일정에 대해 <code>chrome.notifications</code>로 알림을 생성합니다. <code>requireInteraction: true</code>로 사용자가 닫을 때까지 유지됩니다.</p>
+            </div>
+          </div>
+          <div class="step">
+            <div class="step-left"><div class="step-num">3</div><div class="step-line"></div></div>
+            <div class="step-content">
+              <h4>"녹음 시작" 버튼 클릭</h4>
+              <p>웹앱 탭이 없으면 새 탭을 열고 React 마운트 + Turbopack CSS 주입까지 <strong>2초</strong> 대기 후 <code>SELECT_EVENT</code>를 주입합니다.</p>
+            </div>
+          </div>
+          <div class="step">
+            <div class="step-left"><div class="step-num">4</div></div>
+            <div class="step-content">
+              <h4>1단계 자동 세팅</h4>
+              <p>웹앱 1단계(SetupScreen)에 <strong>회의 제목 + 참여자 목록</strong>이 자동으로 입력됩니다.</p>
+            </div>
+          </div>
+        </div>
+      </div>
+      <div>
+        <div class="code-label">extension/background.js — 핵심 코드</div>
+        <pre><span class="cm">// 1분 주기 알람 등록</span>
+chrome.runtime.onInstalled.<span class="fn">addListener</span>(() => {
+  chrome.alarms.<span class="fn">create</span>(<span class="st">'meetingCheck'</span>, { periodInMinutes: <span class="nm">1</span> })
+})
+
+<span class="cm">// 3분 전 ~ 시작 후 1분 사이 이벤트만 알림</span>
+<span class="kw">const</span> NOTIFY_BEFORE_MS = <span class="nm">3</span> * <span class="nm">60</span> * <span class="nm">1000</span>
+<span class="kw">if</span> (msUntil &gt; NOTIFY_BEFORE_MS || msUntil &lt; -<span class="nm">60_000</span>) <span class="kw">continue</span>
+
+chrome.notifications.<span class="fn">create</span>(key, {
+  type: <span class="st">'basic'</span>,
+  title: <span class="st">`📋 ${event.title}`</span>,
+  message: <span class="st">`${timeStr} 시작 — ${minutesLeft}분 후`</span>,
+  buttons: [
+    { title: <span class="st">'녹음 시작'</span> },
+    { title: <span class="st">'닫기'</span> },
+  ],
+  requireInteraction: <span class="kw">true</span>,
+})
+
+<span class="cm">// 알림 버튼 클릭 → 웹앱에 SELECT_EVENT 전달</span>
+chrome.notifications.onButtonClicked.<span class="fn">addListener</span>(<span class="kw">async</span> (notifId, btnIdx) => {
+  chrome.notifications.<span class="fn">clear</span>(notifId)
+  <span class="kw">if</span> (btnIdx !== <span class="nm">0</span>) <span class="kw">return</span>  <span class="cm">// 닫기</span>
+  <span class="kw">let</span> tab = <span class="kw">await</span> <span class="fn">findMeetNotesTab</span>()
+  <span class="kw">if</span> (!tab) tab = <span class="kw">await</span> <span class="fn">openMeetNotesTab</span>()  <span class="cm">// 2초 대기 포함</span>
+  <span class="kw">await</span> <span class="fn">postToWebApp</span>(tab.id, {
+    type: <span class="st">'SELECT_EVENT'</span>,
+    title: evtData.title,
+    attendees: evtData.attendees,
+  })
+})</pre>
+
+        <div class="callout blue" style="margin-bottom:0">
+          <div class="callout-icon">ℹ️</div>
+          <div><strong>중복 알림 방지:</strong> <code>eventKey = title + startTime</code>으로 고유 키를 생성하고 <code>chrome.storage.session</code>에 보관. 24시간 내 같은 키의 알림은 재발송하지 않습니다.</div>
+        </div>
+      </div>
+    </div>
+  </div>
+
+  <!-- ② AI 할루시네이션 방지 -->
+  <div class="card" style="border-left:3px solid var(--blue);margin-bottom:20px">
+    <div style="display:flex;align-items:center;gap:10px;margin-bottom:14px">
+      <span class="badge blue">IMPROVED</span>
+      <h3 style="margin:0">② AI 분석 — 할루시네이션 방지 강화</h3>
+    </div>
+    <p style="margin-bottom:16px;font-size:13px;color:var(--text-secondary)">
+      Gemini가 회의에서 말하지 않은 내용을 지어내는 문제를 해결하기 위해 <strong>3가지 방어 레이어</strong>를 추가했습니다.
+      이전: 기본 temperature, 자유 형식 프롬프트 → 이후: temperature 0 + systemInstruction 절대원칙 + 3단계 사실 기반 구조.
+    </p>
+
+    <div class="grid-2" style="margin-bottom:16px">
+      <div>
+        <div style="font-size:11px;font-weight:700;color:var(--text-muted);text-transform:uppercase;letter-spacing:1.5px;margin-bottom:10px">변경 전 (문제)</div>
+        <div class="card" style="border-left:3px solid var(--red);margin-bottom:0">
+          <ul style="list-style:none;display:flex;flex-direction:column;gap:7px">
+            <li style="display:flex;gap:8px;font-size:12px;color:var(--text-secondary)"><span style="color:var(--red);font-weight:800">✕</span> 기본 temperature — 창의적 추론 허용</li>
+            <li style="display:flex;gap:8px;font-size:12px;color:var(--text-secondary)"><span style="color:var(--red);font-weight:800">✕</span> systemInstruction 없음 — 역할 미정의</li>
+            <li style="display:flex;gap:8px;font-size:12px;color:var(--text-secondary)"><span style="color:var(--red);font-weight:800">✕</span> 섹션별 요약 형식 — 없는 내용 보충 가능</li>
+            <li style="display:flex;gap:8px;font-size:12px;color:var(--text-secondary)"><span style="color:var(--red);font-weight:800">✕</span> 담당자·기한 미언급 시 임의 추정 가능</li>
+          </ul>
+        </div>
+      </div>
+      <div>
+        <div style="font-size:11px;font-weight:700;color:var(--text-muted);text-transform:uppercase;letter-spacing:1.5px;margin-bottom:10px">변경 후 (해결)</div>
+        <div class="card" style="border-left:3px solid var(--green);margin-bottom:0">
+          <ul style="list-style:none;display:flex;flex-direction:column;gap:7px">
+            <li style="display:flex;gap:8px;font-size:12px;color:var(--text-secondary)"><span style="color:var(--green);font-weight:800">✓</span> <code>temperature: 0</code> — 사실 외 출력 억제</li>
+            <li style="display:flex;gap:8px;font-size:12px;color:var(--text-secondary)"><span style="color:var(--green);font-weight:800">✓</span> systemInstruction 절대원칙 8개 항목</li>
+            <li style="display:flex;gap:8px;font-size:12px;color:var(--text-secondary)"><span style="color:var(--green);font-weight:800">✓</span> 3단계 사실 기반 구조 강제</li>
+            <li style="display:flex;gap:8px;font-size:12px;color:var(--text-secondary)"><span style="color:var(--green);font-weight:800">✓</span> 미언급 담당자·기한 → 무조건 "미정"</li>
+          </ul>
+        </div>
+      </div>
+    </div>
+
+    <div class="code-label">3단계 사실 기반 detail 구조</div>
+    <div style="display:grid;grid-template-columns:1fr 1fr 1fr;gap:10px;margin-bottom:14px">
+      <div style="background:var(--bg-elevated);border-radius:8px;padding:14px">
+        <div style="font-size:11px;font-weight:800;color:var(--green);margin-bottom:6px">1단계 · 주요 발언 요약</div>
+        <p style="font-size:12px;color:var(--text-secondary)">실제 발언된 내용을 주제별로 묶어 정리. 발언자 이름 명시. 대화에 없는 맥락·배경 설명 추가 금지.</p>
+      </div>
+      <div style="background:var(--bg-elevated);border-radius:8px;padding:14px">
+        <div style="font-size:11px;font-weight:800;color:var(--blue);margin-bottom:6px">2단계 · 명시적 결정사항</div>
+        <p style="font-size:12px;color:var(--text-secondary)">"~하기로 했다", "~로 확정했다"고 말한 내용만. 그런 말이 없었으면 "확인되지 않습니다" 명시.</p>
+      </div>
+      <div style="background:var(--bg-elevated);border-radius:8px;padding:14px">
+        <div style="font-size:11px;font-weight:800;color:var(--orange);margin-bottom:6px">3단계 · 미결 및 보류</div>
+        <p style="font-size:12px;color:var(--text-secondary)">"나중에", "다음에", "추후 확인" 등으로 미룬 내용만. 없으면 "확인되지 않습니다" 명시.</p>
+      </div>
+    </div>
+
+    <div class="code-label">app/api/analyze/route.ts — 모델 폴백 체인</div>
+    <pre><span class="cm">// 503 과부하 시 하위 모델로 자동 폴백</span>
+<span class="kw">const</span> MODEL_FALLBACK = [<span class="st">'gemini-2.5-flash'</span>, <span class="st">'gemini-2.0-flash'</span>, <span class="st">'gemini-1.5-flash'</span>]
+
+<span class="kw">for</span> (<span class="kw">const</span> modelName <span class="kw">of</span> MODEL_FALLBACK) {
+  <span class="kw">for</span> (<span class="kw">let</span> attempt = <span class="nm">0</span>; attempt &lt; <span class="nm">2</span>; attempt++) {
+    <span class="kw">try</span> {
+      <span class="kw">const</span> result = <span class="kw">await</span> model.<span class="fn">generateContent</span>(parts)
+      <span class="kw">return</span> result.response.<span class="fn">text</span>()
+    } <span class="kw">catch</span> (err) {
+      <span class="cm">// 503/overloaded만 재시도, 나머지는 즉시 다음 모델로</span>
+      <span class="kw">const</span> retryable = msg.<span class="fn">includes</span>(<span class="st">'503'</span>) || msg.<span class="fn">includes</span>(<span class="st">'overloaded'</span>)
+      <span class="kw">if</span> (!retryable) <span class="kw">throw</span> err
+      <span class="kw">if</span> (attempt === <span class="nm">0</span>) <span class="kw">await new</span> Promise((r) => setTimeout(r, <span class="nm">2000</span>))
+    }
+  }
+}</pre>
+
+    <div class="callout orange" style="margin-bottom:0">
+      <div class="callout-icon">🔧</div>
+      <div><strong>오디오 직접 분석:</strong> 표준 녹음 시 오디오 Blob을 Gemini에 <code>inlineData</code>로 전달합니다. Gemini가 전사(utterances)와 분석(detail/core/keywords/actions/nextSteps)을 한 번에 처리하므로 Deepgram 의존 없이도 동작합니다. 실시간 대사 모드는 Deepgram 텍스트를 그대로 프롬프트에 전달합니다.</div>
+    </div>
+  </div>
+
+  <!-- ③ 익스텐션 녹음 상태 Sync 수정 -->
+  <div class="card" style="border-left:3px solid var(--orange);margin-bottom:20px">
+    <div style="display:flex;align-items:center;gap:10px;margin-bottom:14px">
+      <span class="badge orange">FIXED</span>
+      <h3 style="margin:0">③ 익스텐션 팝업 — 녹음 완료 후 상태 불일치 수정</h3>
+    </div>
+    <p style="margin-bottom:14px;font-size:13px;color:var(--text-secondary)">
+      웹앱에서 녹음을 완료해도 익스텐션 팝업이 "녹음 중"으로 남아있던 문제를 수정했습니다.
+    </p>
+
+    <div class="grid-2">
+      <div>
+        <div style="font-size:11px;font-weight:700;color:var(--red);text-transform:uppercase;letter-spacing:1.5px;margin-bottom:8px">원인 분석</div>
+        <p style="font-size:13px;color:var(--text-secondary);margin-bottom:12px">
+          녹음 종료 시 <code>setStep('review')</code>가 즉시 실행되어 <code>RECORDING_STOPPED</code> 이벤트가 발송되지 않습니다. <code>ANALYSIS_DONE</code>은 전송되지만, background.js의 해당 핸들러에 <code>isRecording: false</code>가 없어 팝업이 계속 "녹음 중"으로 표시됐습니다.
+        </p>
+        <div class="code-label">수정 전 (버그)</div>
+        <pre style="margin-bottom:0"><span class="kw">if</span> (event.type === <span class="st">'ANALYSIS_DONE'</span>) {
+  <span class="kw">await</span> chrome.storage.session.<span class="fn">set</span>({
+    <span class="cm">// isRecording 없음 → 팝업이 녹음중으로 유지</span>
+    isStopping: <span class="kw">false</span>, isDone: <span class="kw">true</span>,
+    result: event.result ?? <span class="kw">null</span>,
+  })
+}</pre>
+      </div>
+      <div>
+        <div style="font-size:11px;font-weight:700;color:var(--green);text-transform:uppercase;letter-spacing:1.5px;margin-bottom:8px">수정 내용</div>
+        <p style="font-size:13px;color:var(--text-secondary);margin-bottom:12px">
+          <code>ANALYSIS_DONE</code> 핸들러에 <code>isRecording: false</code>를 추가했습니다. 분석 완료 시점에 반드시 <code>isRecording</code>을 해제해 팝업 상태를 정상화합니다.
+        </p>
+        <div class="code-label">수정 후 (extension/background.js)</div>
+        <pre style="margin-bottom:0"><span class="kw">if</span> (event.type === <span class="st">'ANALYSIS_DONE'</span>) {
+  <span class="kw">await</span> chrome.storage.session.<span class="fn">set</span>({
+    <span class="cm">// isRecording: false 추가 — RECORDING_STOPPED 생략 보완</span>
+    isRecording: <span class="kw">false</span>,
+    isStopping: <span class="kw">false</span>, isDone: <span class="kw">true</span>,
+    result: event.result ?? <span class="kw">null</span>,
+    error: event.error ?? <span class="kw">null</span>,
+  })
+}</pre>
+      </div>
+    </div>
+  </div>
+
+  <!-- ④ CSS 타이밍 버그 수정 -->
+  <div class="card" style="border-left:3px solid var(--purple);margin-bottom:20px">
+    <div style="display:flex;align-items:center;gap:10px;margin-bottom:14px">
+      <span class="badge purple">FIXED</span>
+      <h3 style="margin:0">④ CSS 타이밍 버그 — 익스텐션 진입 시 제목 미표시·토글 소실</h3>
+    </div>
+    <p style="margin-bottom:14px;font-size:13px;color:var(--text-secondary)">
+      Chrome 익스텐션이 웹앱 탭을 새로 열 때, Turbopack 개발 모드에서 CSS가 JS로 주입되는 특성으로 인해 초기 렌더에서 스타일이 적용되지 않는 타이밍 윈도우가 존재합니다. 이 구간에 이벤트가 주입되면 제목이 보이지 않고 토글 버튼이 사라지는 현상이 발생했습니다.
+    </p>
+
+    <div style="display:grid;grid-template-columns:1fr 1fr 1fr;gap:10px;margin-bottom:14px">
+      <div>
+        <div class="code-label">수정 1 — app/layout.tsx</div>
+        <pre style="margin-bottom:0"><span class="cm">// CSS 로드 전에도 텍스트가 보이도록</span>
+<span class="cm">// body에 인라인 스타일 추가</span>
+&lt;<span class="kw">body</span> style={{
+  margin: <span class="nm">0</span>,
+  background: <span class="st">'#121212'</span>,
+  color: <span class="st">'#fff'</span>   <span class="cm">// ← 추가</span>
+}}&gt;
+  {children}
+&lt;/<span class="kw">body</span>&gt;</pre>
+      </div>
+      <div>
+        <div class="code-label">수정 2 — app/globals.css</div>
+        <pre style="margin-bottom:0"><span class="cm">/* CSS 변수 미로드 시 폴백값 추가 */</span>
+.sp-toggle {
+  background: <span class="fn">var</span>(--border-mid, <span class="nm">#4d4d4d</span>);
+  <span class="cm">/* ↑ 폴백 #4d4d4d 추가 */</span>
+}
+.sp-toggle.on {
+  background: <span class="fn">var</span>(--green, <span class="nm">#1ed760</span>);
+  <span class="cm">/* ↑ 폴백 #1ed760 추가 */</span>
+}</pre>
+      </div>
+      <div>
+        <div class="code-label">수정 3 — extension/background.js</div>
+        <pre style="margin-bottom:0"><span class="cm">// 새 탭 대기 800ms → 2000ms 증가</span>
+<span class="cm">// React 마운트 + Turbopack CSS</span>
+<span class="cm">// 주입 완료까지 충분히 대기</span>
+<span class="kw">await new</span> Promise(
+  (r) => setTimeout(r, <span class="nm">2000</span>)
+)</pre>
+      </div>
+    </div>
+
+    <div class="callout purple" style="margin-bottom:0">
+      <div class="callout-icon">ℹ️</div>
+      <div><strong>Turbopack 특성:</strong> Next.js 16 개발 서버는 Turbopack을 사용하며, CSS를 렌더 블로킹 <code>&lt;link&gt;</code>가 아닌 JS가 관리하는 <code>&lt;style&gt;</code> 태그로 주입합니다. 프로덕션 빌드(<code>next build</code>)에서는 CSS가 정적으로 번들되므로 이 타이밍 이슈가 발생하지 않습니다.</div>
+    </div>
+  </div>
+
+  <!-- 영향 파일 요약 -->
+  <div class="card">
+    <h3 style="margin-bottom:14px">📁 이번 업데이트 영향 파일</h3>
+    <table class="itable">
+      <tr><th>파일</th><th>변경 유형</th><th>내용</th></tr>
+      <tr>
+        <td><code>extension/background.js</code></td>
+        <td><span class="badge green">NEW</span></td>
+        <td style="color:var(--text-secondary)">회의 알림(<code>chrome.alarms</code> + <code>chrome.notifications</code>), 알림 클릭 → 웹앱 SELECT_EVENT, ANALYSIS_DONE에 isRecording:false 추가</td>
+      </tr>
+      <tr>
+        <td><code>app/api/analyze/route.ts</code></td>
+        <td><span class="badge blue">IMPROVED</span></td>
+        <td style="color:var(--text-secondary)">systemInstruction 절대원칙, temperature:0, 3단계 사실 기반 프롬프트, 모델 폴백 체인, 오디오 inlineData 분석</td>
+      </tr>
+      <tr>
+        <td><code>app/layout.tsx</code></td>
+        <td><span class="badge orange">FIXED</span></td>
+        <td style="color:var(--text-secondary)">body에 <code>color:'#fff'</code> 인라인 스타일 추가 — CSS 로드 전 텍스트 가시성 보장</td>
+      </tr>
+      <tr>
+        <td><code>app/globals.css</code></td>
+        <td><span class="badge orange">FIXED</span></td>
+        <td style="color:var(--text-secondary)"><code>.sp-toggle</code>에 CSS 변수 폴백(<code>var(--border-mid, #4d4d4d)</code>) 추가</td>
+      </tr>
+    </table>
   </div>
 </section>
 
